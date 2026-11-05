@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <g fill="#4fd16b">
+    <path d="M16 2 29 9.5 16 17 3 9.5Z"/>
+    <path d="M3 9.5 16 17v14L3 23.5Z"/>
+    <path d="M16 17 29 9.5v14L16 31Z"/>
+  </g>
+  <path d="M3 9.5 16 17v14L3 23.5Z" fill="#000" fill-opacity=".28"/>
+  <path d="M16 17 29 9.5v14L16 31Z" fill="#000" fill-opacity=".5"/>
+  <path d="M16 2 22.5 5.75 16 9.5 9.5 5.75Z" fill="#fff" fill-opacity=".55"/>
+  <g stroke="#000" stroke-opacity=".35" stroke-width=".75" fill="none">
+    <path d="M22.5 5.75 9.5 13.25M9.5 5.75 22.5 13.25M9.5 13.25v14M3 16.5 16 24M22.5 13.25v14M16 24 29 16.5"/>
+  </g>
+</svg>

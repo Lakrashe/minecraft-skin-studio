@@ -13,8 +13,8 @@ Implementation plan for `docs/SPECIFICATION.md`, following its five phases
 - Every milestone ends with a usable app: no dead buttons, no stub pages.
   UI for a feature is added in the same milestone as the feature's logic.
 
-**Status:** Phase 0 (foundation docs) complete. **Waiting for owner approval to
-start Phase 1.**
+**Status:** Phase 1 in progress. Milestones 1.1 and 1.2 (the "Project
+Foundation" step) are done. Next: 1.3 Engine core, when the owner requests it.
 
 ---
 
@@ -29,14 +29,28 @@ format reference, this roadmap.
 Goal: a polished, fully working local skin editor with synchronized 3D preview,
 import/export, local projects, and a landing page.
 
-### 1.1 Scaffold and tooling
+### 1.1 Scaffold and tooling ✅
 - Vite + React + TS (strict flags per PROJECT_RULES §1.5), Tailwind, React Router.
 - ESLint with import-boundary rules, Prettier, Vitest (Node for engine, jsdom for UI).
 - Folder layout from ARCHITECTURE §2 with `index.ts` per module.
 - Typed i18n (EN reference + IT), CI running typecheck/lint/test.
+- Playwright e2e against the production build (desktop + mobile).
+- Three.js + R3F + Drei installed; lazy `SceneCanvas` in its own chunk.
 - **Accept:** clean clone installs and passes all checks; a forbidden import fails lint; a missing Italian key fails typecheck.
 
-### 1.2 Design system and app shell
+### 1.1–1.2 audit corrections ✅
+An independent foundation audit (2026-11-05) found no P0/P1 issues. Applied:
+failure-safe settings storage with an honest "can't be saved" notice; WebGL2-only
+detection plus a renderer-failure fallback; DOM-free engine/rig typecheck,
+dynamic-import and deep-import lint bans with fixture tests; tooltip Escape
+dismissal, hoverable bubble and preserved `aria-describedby`; Node `engines`
+aligned with locked tools and tested in CI; i18n empty-value test fixed; e2e
+checks runtime errors in every test. The minimatch dev-tool advisory is
+recorded as accepted risk (ARCHITECTURE §13).
+
+### 1.2 Design system and app shell ✅
+*Done; Tabs and Splitter are deferred to 1.14, where the editor layout first
+needs them (no unused components).*
 - Tokens (dark default + light, charcoal/near-black, green accent, user accent
   colors), typography, radii, motion with reduced-motion support.
 - Primitives: Button, IconButton, Panel, Tooltip, Toast, Dialog, Tabs, Slider,

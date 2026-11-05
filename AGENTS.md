@@ -33,19 +33,29 @@ conflict with `PROJECT_RULES.md`, `PROJECT_RULES.md` wins.
 
 ## Commands
 
-> These become valid once the project is scaffolded (Roadmap milestone 1.1).
+Requires Node.js `^22.22.2 || ^24.15.0 || >=26` (enforced by `.npmrc` `engine-strict`;
+CI tests 22.22.2, 24 and 26).
 
 ```bash
 npm install          # install dependencies
-npm run dev          # start the Vite dev server
-npm run typecheck    # tsc --noEmit
-npm run lint         # eslint
-npm run test         # vitest run
+npm run dev          # start the Vite dev server (http://localhost:5173)
+npm run check        # typecheck + lint + format check + unit tests
+npm run typecheck    # tsc -b --noEmit (app, DOM-free engine/rig, tooling, e2e)
+npm run lint         # eslint (includes module-boundary rules)
+npm run format       # prettier --write (code only; Markdown is hand-formatted)
+npm run test         # vitest run (node, jsdom and lint-boundary projects)
+npm run test:e2e     # playwright: builds, serves, tests desktop + mobile
 npm run build        # production build
 ```
 
-Run `typecheck`, `lint`, and `test` before reporting a task as done. If you could
-not run them, say so.
+First-time e2e setup: `npx playwright install chromium`.
+
+Run `npm run check` before reporting a task as done, and `npm run test:e2e` when
+you changed UI, routing or the build. If you could not run them, say so.
+
+Dev-only tooling: `/dev/ui` (dev server only) shows every design-system
+component and a 3D smoke test. Use existing primitives from `src/ui` before
+writing new ones.
 
 ## Working style
 

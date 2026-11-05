@@ -146,7 +146,8 @@ From the specification (§27, §28): every visible control must work.
 ### 1.11 Internationalization and accessibility
 - No hard-coded user-facing strings in components. All UI text comes from the
   typed i18n dictionaries (`src/i18n/`); English is the reference, Italian must
-  have every key (enforced by the type checker).
+  have every key (enforced by the type checker). Exception: developer-only
+  pages registered under `import.meta.env.DEV` (e.g. `/dev/ui`), which never ship.
 - Every interactive element is keyboard-reachable and has an accessible name.
 - Respect `prefers-reduced-motion` and the user's animation preference.
 
