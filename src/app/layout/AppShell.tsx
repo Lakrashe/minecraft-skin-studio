@@ -7,14 +7,17 @@ import { isRouteHandle } from '../navigation';
 import { Footer } from './Footer';
 import { Header } from './Header';
 
-function useDocumentTitle() {
+/** Sets the document title from the deepest route handle and returns that handle. */
+function useRouteHandle() {
   const t = useT();
   const matches = useMatches();
-  const handle = [...matches].reverse().find((m) => isRouteHandle(m.handle))?.handle;
-  const titleKey = isRouteHandle(handle) ? handle.titleKey : undefined;
+  const found = [...matches].reverse().find((m) => isRouteHandle(m.handle))?.handle;
+  const handle = isRouteHandle(found) ? found : undefined;
+  const titleKey = handle?.titleKey;
   useEffect(() => {
     document.title = titleKey ? `${t(titleKey)} · ${BRAND.name}` : BRAND.name;
   }, [t, titleKey]);
+  return handle;
 }
 
 /** Thin accent bar shown while a lazy route is loading. */
@@ -34,9 +37,9 @@ function RouteProgress() {
 
 export function AppShell() {
   const t = useT();
-  useDocumentTitle();
+  const fullHeight = useRouteHandle()?.fullHeight === true;
   return (
-    <div className="flex min-h-dvh flex-col">
+    <div className={cn('flex min-h-dvh flex-col', fullHeight && 'lg:h-dvh lg:overflow-hidden')}>
       <a
         href="#main"
         className="sr-only z-50 rounded-control bg-accent px-4 py-2 text-accent-contrast focus:not-sr-only focus:fixed focus:top-3 focus:left-3"
@@ -45,10 +48,18 @@ export function AppShell() {
       </a>
       <RouteProgress />
       <Header />
-      <main id="main" tabIndex={-1} className="flex flex-1 flex-col outline-none">
+      <main
+        id="main"
+        tabIndex={-1}
+        className={cn(
+          'flex flex-1 flex-col outline-none',
+          // App-style pages fill the remaining viewport height on large screens.
+          fullHeight && 'lg:min-h-0',
+        )}
+      >
         <Outlet />
       </main>
-      <Footer />
+      {!fullHeight && <Footer />}
       <ScrollRestoration />
     </div>
   );

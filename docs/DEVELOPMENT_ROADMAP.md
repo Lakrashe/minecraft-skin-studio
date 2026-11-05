@@ -13,8 +13,13 @@ Implementation plan for `docs/SPECIFICATION.md`, following its five phases
 - Every milestone ends with a usable app: no dead buttons, no stub pages.
   UI for a feature is added in the same milestone as the feature's logic.
 
-**Status:** Phase 1 in progress. Milestones 1.1 and 1.2 (the "Project
-Foundation" step) are done. Next: 1.3 Engine core, when the owner requests it.
+**Status:** Phase 1 in progress. Done: 1.1–1.2 ("Project Foundation") and the
+owner's "Homepage and User Interface" step, which delivered 1.16 and parts of
+1.3, 1.9, 1.10 and 1.14 (marked below). Next, when the owner requests it: finish
+1.3 (engine core), then 1.4 (document store and history).
+
+> Naming note: the owner called the homepage step "Phase 2". In this roadmap,
+> Phase 2 remains *Creative tools*; the homepage step belongs to Phase 1.
 
 ---
 
@@ -61,7 +66,9 @@ needs them (no unused components).*
   boundary, 404 page.
 - **Accept:** theme and accent switch live and persist; all primitives keyboard-accessible; layouts work at phone/tablet/desktop widths.
 
-### 1.3 Engine core
+### 1.3 Engine core (partly done)
+*Done: types, `PixelBuffer` basics, region tables and lookup (tested). Remaining:
+masks, symmetry maps, flatten, legacy conversion, import validation, export rules.*
 - PixelBuffer, Rgba, raster ops, region tables (classic/slim × inner/outer),
   region lookup, masks (part, skin layer, used pixels), symmetry maps,
   flatten, legacy 64×32 conversion, import validation, export rules.
@@ -96,7 +103,11 @@ needs them (no unused components).*
   custom palettes, saved palettes (persisted).
 - **Accept:** inputs validate and stay in sync; palettes persist across reloads.
 
-### 1.9 3D viewer
+### 1.9 3D viewer (partly done)
+*Done: player model from engine UVs, classic/slim, inner/outer toggles, per-part
+visibility, orbit controls, camera presets, fullscreen, no-WebGL fallback.
+Remaining: wireframe, texture inspection, lighting presets, screenshots, live
+updates from the document store.*
 - PlayerModel with engine-derived UVs; classic/slim; outer-layer toggle;
   per-part visibility; correct transparency; instant updates from the store.
 - Orbit rotate/zoom/pan, front/back/side/top/reset presets, fullscreen,
@@ -105,7 +116,9 @@ needs them (no unused components).*
 - Screenshot (PNG, optional transparent background).
 - **Accept:** synthetic face-colored skin shows each color on the correct face for both models; 2D edits appear in 3D in the same frame; no GPU resource leaks on remount.
 
-### 1.10 Animations and preview poses
+### 1.10 Animations and preview poses (partly done)
+*Done: `rig/` module with idle and walk, pause/resume. Remaining: running,
+jumping, waving, dancing, preview poses.*
 - `rig/` module; idle, walking, running, jumping, waving, dancing; pause/resume;
   a small set of preview poses.
 - **Accept:** clip sampling unit-tested; animations run at 60 fps on a mid-range laptop.
@@ -127,7 +140,10 @@ needs them (no unused components).*
   (with confirmation), thumbnails; new blank skin.
 - **Accept:** reload restores the last state; deleting asks for confirmation; storage errors surface as toasts.
 
-### 1.14 Editor layout, shortcuts, history panel
+### 1.14 Editor layout, shortcuts, history panel (partly done)
+*Done: Studio layout (left/center/right/bottom, mobile tabs) in viewer mode.
+Remaining: top-bar project actions (as their features land), resizable panels,
+history panel, shortcuts.*
 - Top bar, left/center/right/bottom panels per spec §25; resizable and
   collapsible panels with persisted layout; mobile/tablet layout.
 - Drawing history panel (jump to entry), status bar (cursor texel, part/face,
@@ -138,10 +154,14 @@ needs them (no unused components).*
 - Theme, accent, editor preferences, grid settings, autosave settings, animation
   preferences, language (EN/IT), shortcut customization.
 
-### 1.16 Landing page
+### 1.16 Landing page ✅
 - 3D hero (slow rotation, animated background, headline/subtitle, CTAs),
-  feature sections for **available** features, FAQ, footer.
-- "Explore Community Skins" CTA and community sections are added in Phase 4.
+  feature cards with honest status badges, sample characters (D9), accuracy
+  section, FAQ, final CTA, footer.
+- Primary CTA reads "Open the Studio" until drawing works, then "Start
+  Creating" (D10). "Explore Community Skins" and community sections arrive in
+  Phase 4.
+- Not yet measured: Lighthouse score (run before Phase 1 sign-off).
 - **Accept:** Lighthouse performance ≥ 85 on desktop with 3D lazy-loaded; no fake data.
 
 ---

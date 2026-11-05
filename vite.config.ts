@@ -11,6 +11,9 @@ export default defineConfig({
   },
   build: {
     target: 'es2022',
+    // The lazily loaded `three` chunk (~250 kB gzip) is the only one above
+    // Vite's 500 kB default; it never blocks first paint (docs/ARCHITECTURE.md §2).
+    chunkSizeWarningLimit: 1000,
     rolldownOptions: {
       output: {
         // Keep the 3D stack in its own chunk so pages without 3D never download it.

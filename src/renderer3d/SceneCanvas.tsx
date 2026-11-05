@@ -15,7 +15,7 @@ export interface SceneCanvasProps {
   readonly fallback: ReactNode;
   /** `demand` renders only on invalidation — use for static previews to save battery. */
   readonly frameloop?: 'always' | 'demand';
-  readonly className?: string;
+  readonly className?: string | undefined;
   /** Accessible description of what the 3D view shows. */
   readonly label: string;
 }

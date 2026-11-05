@@ -181,7 +181,7 @@ test('developer-only routes are not shipped', async ({ page }) => {
 test('layout has no horizontal overflow at any width', async ({ page }) => {
   for (const width of [360, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 800 });
-    for (const path of ['/', '/settings', '/missing']) {
+    for (const path of ['/', '/editor', '/settings', '/missing']) {
       await page.goto(path);
       await expect(page.locator('h1')).toBeVisible();
       const overflow = await page.evaluate(
@@ -190,4 +190,79 @@ test('layout has no horizontal overflow at any width', async ({ page }) => {
       expect(overflow, `${path} @ ${String(width)}px`).toBeLessThanOrEqual(0);
     }
   }
+});
+
+test.describe('homepage', () => {
+  test('hero CTA opens the studio', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('link', { name: 'Open the Studio' }).first().click();
+    await expect(page).toHaveURL(/\/editor$/);
+    await expect(page.getByRole('heading', { level: 1, name: 'Studio' })).toBeVisible();
+  });
+
+  test('shows a live 3D character in the hero', async ({ page }) => {
+    await page.goto('/');
+    const hero = page.getByRole('img', { name: /Interactive 3D preview of the Explorer/ });
+    await expect(hero).toBeVisible();
+    await expect(hero.locator('canvas')).toBeVisible();
+  });
+
+  test('sample characters open in the studio', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('link', { name: 'Meet the sample characters' }).click();
+    await page.getByRole('button', { name: /^Mage/ }).click();
+    await expect(page.getByRole('button', { name: /^Mage/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await page.getByRole('link', { name: 'Open in Studio' }).click();
+    await expect(page).toHaveURL(/\/editor\?sample=mage$/);
+    await expect(page.getByLabel('Character', { exact: true })).toHaveValue('mage');
+  });
+
+  test('feature cards state honestly what is available', async ({ page }) => {
+    await page.goto('/');
+    const features = page.locator('#features');
+    await expect(features.getByText('Available now')).toHaveCount(1);
+    await expect(features.getByText('Planned')).toHaveCount(4);
+  });
+});
+
+test.describe('studio', () => {
+  test('inspects pixels with the keyboard', async ({ page }) => {
+    await page.goto('/editor?sample=knight');
+    const texture = page.getByRole('img', { name: /64×64 skin texture of Knight/ });
+    await texture.focus();
+    await page.keyboard.press('Shift+ArrowRight');
+    await page.keyboard.press('Shift+ArrowDown');
+    await expect(page.getByText('Pixel 8, 8')).toBeVisible();
+    await expect(page.getByText('Head · Front · Inner')).toBeVisible();
+  });
+
+  test('view controls change state and there are no editing controls', async ({
+    page,
+    isMobile,
+  }) => {
+    await page.goto('/editor');
+    if (isMobile) await page.getByRole('radio', { name: 'View', exact: true }).click();
+    const head = page.getByRole('button', { name: 'Head', exact: true });
+    await head.click();
+    await expect(head).toHaveAttribute('aria-pressed', 'true');
+    const outer = page.getByRole('switch', { name: 'Outer layer' });
+    await outer.click();
+    await expect(outer).toHaveAttribute('aria-checked', 'false');
+    for (const name of [/^undo/i, /^redo/i, /^export/i, /^import/i, /^save/i]) {
+      await expect(page.getByRole('button', { name })).toHaveCount(0);
+    }
+  });
+
+  test('renders the 3D preview with camera controls', async ({ page, isMobile }) => {
+    await page.goto('/editor');
+    if (isMobile) await page.getByRole('radio', { name: '3D preview' }).click();
+    const preview = page.getByRole('img', { name: '3D preview of Explorer' });
+    await expect(preview.locator('canvas')).toBeVisible();
+    await page.getByRole('button', { name: 'Back', exact: true }).click();
+    await page.getByRole('radio', { name: 'Walk' }).click();
+    await expect(page.getByRole('radio', { name: 'Walk' })).toHaveAttribute('aria-checked', 'true');
+  });
 });

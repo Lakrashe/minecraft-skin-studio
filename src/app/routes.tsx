@@ -38,6 +38,11 @@ export function createRoutes(): RouteObject[] {
           lazy: async () => ({ Component: (await import('@/features/home')).HomePage }),
         },
         {
+          path: 'editor',
+          handle: { titleKey: 'studio.title', fullHeight: true } satisfies RouteHandle,
+          lazy: async () => ({ Component: (await import('@/features/studio')).StudioPage }),
+        },
+        {
           path: 'settings',
           handle: handle('settings.title'),
           lazy: async () => ({ Component: (await import('@/features/settings')).SettingsPage }),

@@ -5,10 +5,13 @@ The rules it implements are in `PROJECT_RULES.md` §1. Build order is in
 `docs/DEVELOPMENT_ROADMAP.md`.
 
 Status: **approved design** (decisions D1, D3–D5 approved 2026-11-05).
-Implemented so far: the Phase 1 foundation (milestones 1.1–1.2) — tooling,
-module layout and boundaries, design system, app shell, settings, i18n and the
-lazy 3D canvas. The skin engine, editor, renderer and persistence sections below
-are design, not yet implementation. Decisions are summarized in §12.
+Implemented so far: the Phase 1 foundation (milestones 1.1–1.2) and the
+homepage + Studio viewer step — tooling, boundaries, design system, app shell,
+settings, i18n; engine types, `PixelBuffer` and UV region tables; original
+sample characters (`content/samples`); the 3D player model with idle/walk
+animation; read-only 2D texture and flat views; the Studio layout in viewer
+mode (§5a). Document model, commands/history, tools and persistence below are
+design, not yet implementation. Decisions are summarized in §12.
 
 ---
 
@@ -312,6 +315,27 @@ interface DocumentStore {
 8. No tool writes outside the active mask.
 
 ---
+
+## 5a. Implemented viewer pieces (homepage + Studio step)
+
+- `engine/format/regions.ts`: the region table, `partFaces`, `allFaceRegions`,
+  `regionAt` (tested: every face, no overlaps, both models).
+- `content/samples`: four original characters painted in code through the
+  region tables (`SkinPainter`); tests assert 64×64, opaque inner layer,
+  transparent unused pixels and determinism.
+- `rig/animation.ts`: `idle` and `walk` clips as pure `Pose` functions.
+- `renderer3d/player-geometry.ts` (pure, tested): joint pivots and box offsets,
+  and `boxUvs`, which maps net faces to Three.js `BoxGeometry` order
+  (+x ← `left`, −x ← `right`, bottom face flipped vertically).
+  `PlayerModel` uses an sRGB nearest-filtered `DataTexture`, an opaque inner
+  material and an alpha-tested, double-sided outer shell (+0.5 head, +0.25 rest).
+  `PlayerViewer` adds Drei `OrbitControls` and camera presets.
+- `editor2d/TextureView`: read-only canvas view (checkerboard, grid, face
+  outlines, focus dimming, pointer and arrow-key pixel inspection);
+  `FlatPreview`/`composeFlatView` for thumbnails and the no-WebGL fallback.
+- `features/studio`: Studio layout (left view panel, center texture, right 3D,
+  status bar; tabs on phones). `useStudio` (Zustand) holds view state only;
+  pixels come from the selected sample until the document store exists.
 
 ## 5. 2D editor (`editor2d/`)
 
