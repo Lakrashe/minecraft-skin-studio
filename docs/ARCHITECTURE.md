@@ -67,21 +67,54 @@ src/
   editor2d/          Canvas 2D editor: viewport, renderer, overlays, input → tools
   renderer3d/        R3F: PlayerModel, skin texture binding, camera rigs, lighting
                      presets, environments, multi-view, screenshot/hi-res render
-  ui/                Design system: tokens, Button, Panel, Tooltip, Toast, Dialog,
-                     Slider, Tabs, ColorWheel, Splitter, Icon, Logo …
+  ui/                Design system: Button, IconButton, Panel, Tooltip, Dialog,
+                     TextField/Select/Slider, Switch, SegmentedControl, Badge, Kbd,
+                     Spinner/PixelLoader, Icon, Logo, toast store + Toaster
+                     (later: Tabs, ColorWheel, Splitter …)
   features/          One folder per page/feature (home, editor, projects, settings,
                      templates, random, outfits, showcase, pose, compare, ai,
-                     image-to-skin, gallery, skin-detail, profile, marketplace)
-  state/             Zustand stores: settings, editor UI, session, toasts
-  i18n/              en.ts (reference), it.ts (typed), t() helper, locale detection
+                     image-to-skin, gallery, skin-detail, profile, marketplace).
+                     `dev-ui/` is a dev-only component gallery at /dev/ui.
+  state/             Zustand stores: settings (persisted), later editor UI, session
+  i18n/              en.ts (reference), it.ts (typed), I18nProvider/useT, detection
   services/          Typed backend client (Supabase), feature-flag detection of
                      configured services
   content/           Shipped data: palettes, template recipes, outfit presets, pose
                      presets — all original, editable
-  app/               Router, layout shell, providers, error boundaries
+  app/               Router (routes.tsx), layout shell, ThemeController, brand.ts,
+                     navigation (NAV_ITEMS), error boundary
+  test/              Shared test setup (jsdom shims)
+  index.css          Tailwind entry + design tokens (CSS variables, light/dark)
+e2e/                 Playwright end-to-end tests (run against the production build)
 supabase/            (Phase 3+) migrations/, functions/, seed.sql, RLS tests
-public/              favicon, logo, manifest
+public/              favicon, manifest
 ```
+
+### Design tokens and theming
+- Colors are CSS variables on `:root` (`--bg`, `--surface`, `--line`, `--text`,
+  `--accent` …), redefined for `[data-theme='light']`, and exposed to Tailwind
+  through `@theme inline` (`bg-surface`, `text-muted`, `border-line`, `bg-accent`).
+  Components never use raw hex colors.
+- `ThemeController` writes `data-theme`, `data-motion`, `lang`, `--accent` and a
+  computed readable `--accent-contrast` onto `<html>`. An inline script in
+  `index.html` applies the saved theme and accent before first paint.
+- Motion: `data-motion='reduced'` (user setting or OS preference) disables
+  animations globally.
+
+### Routing
+- `src/app/routes.tsx`: React Router data router, every page lazy-loaded.
+  Route `handle.titleKey` sets the document title.
+- `NAV_ITEMS` lists only fully built pages (PROJECT_RULES §1.10).
+- Dev-only routes are gated on the build-time constant `import.meta.env.DEV`, so
+  they and their chunks are absent from production builds (covered by e2e).
+
+### 3D bundle
+- `renderer3d/index.ts` exports `LazySceneCanvas` (React.lazy) and never imports
+  `three` statically; Vite's `codeSplitting` puts three/@react-three in a `three`
+  chunk. Pages without 3D never download it.
+- `SceneCanvas` sets project defaults (DPR cap, transparent background, camera
+  aimed at the player model center) and renders a caller-supplied fallback when
+  WebGL is unavailable.
 
 ### Import boundaries (enforced by ESLint `no-restricted-imports`)
 
@@ -91,12 +124,16 @@ public/              favicon, logo, manifest
 | `rig` | nothing in `src/` |
 | `platform` | `engine` |
 | `editor2d` | `engine`, `platform` |
-| `renderer3d` | `engine`, `rig`, `platform` |
+| `renderer3d` | `engine`, `rig`, `platform` (translated text is passed in as props) |
 | `ui` | `i18n` (no business logic) |
-| `state` | `engine` (types), `rig` (types) |
-| `services` | `engine` (types), `rig` (types) |
-| `features/*` | everything above; **not** other features' internals |
+| `i18n` | nothing in `src/` |
+| `state` | `engine`, `rig`, `i18n` |
+| `services` | `engine`, `rig`, `i18n` |
+| `features/*` | everything except `app`; other features only via their `index.ts` |
 | `app` | everything |
+
+`engine` and `rig` also may not import React, React Router, Zustand or Three.js.
+The rules live in `eslint.config.js`.
 
 `editor2d` ✗ `renderer3d` in both directions. Features that show both views
 (editor, compare) compose them; the views never know about each other.
@@ -431,22 +468,25 @@ Architectural consequences:
 ## 13. Dependencies
 
 Each package may be installed only from its phase onward (PROJECT_RULES §1.7).
-Versions are pinned to current stable releases at install time.
+Installed versions are locked in `package-lock.json` (major versions at
+foundation time: React 19, React Router 8, Vite 8 with Rolldown, TypeScript 6,
+Tailwind 4, Vitest 5, ESLint 10, Three 0.187, R3F 9, Drei 10, Zustand 5).
 
 | Package | Kind | Phase | Why |
 |---|---|---|---|
 | react, react-dom | runtime | 1 | UI (spec §26) |
-| react-router (v7, library mode) | runtime | 1 | 15 pages, deep links, lazy routes |
+| react-router (data router, library mode) | runtime | 1 | 15 pages, deep links, lazy routes |
 | zustand | runtime | 1 | App/UI state (spec §26) |
 | three | runtime | 1 | 3D engine (spec §26) |
 | @react-three/fiber | runtime | 1 | React renderer for Three (spec §26) |
 | @react-three/drei | runtime | 1 | OrbitControls, View, Environment helpers (spec §26) |
-| tailwindcss (+ @tailwindcss/vite) | dev/build | 1 | Styling (spec §26) |
-| typescript, vite, @vitejs/plugin-react | dev | 1 | Build |
+| tailwindcss, @tailwindcss/vite | dev/build | 1 | Styling (spec §26) |
+| typescript, vite, @vitejs/plugin-react, @types/* | dev | 1 | Build and types |
 | vitest | dev | 1 | Unit tests |
 | @testing-library/react, jsdom | dev | 1 | Component tests for critical UI |
-| eslint, typescript-eslint, eslint-plugin-react-hooks, prettier | dev | 1 | Quality |
-| @playwright/test | dev | 1 (optional) | E2E smoke tests for editor flows |
+| eslint, @eslint/js, typescript-eslint, eslint-plugin-react-hooks, eslint-config-prettier, globals | dev | 1 | Lint + module boundaries |
+| prettier | dev | 1 | Formatting (code only; Markdown is hand-formatted) |
+| @playwright/test | dev | 1 | E2E tests against the production build |
 | zod | runtime | 2 | Shared schema validation (recipes, project files, API I/O) |
 | @supabase/supabase-js | runtime | 3 | Backend client |
 | supabase (CLI) | dev | 3 | Local backend, migrations |

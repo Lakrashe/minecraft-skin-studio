@@ -5,9 +5,9 @@ accurate UV mapping and a synchronized real-time 3D preview at its core, plus
 templates, outfits, poses, cinematic renders, AI generation, a community
 gallery, and an optional marketplace.
 
-> **Status:** pre-implementation. This repository contains the specification,
-> architecture, and development rules only. Phase 1 starts after owner approval.
-> See [`docs/DEVELOPMENT_ROADMAP.md`](docs/DEVELOPMENT_ROADMAP.md).
+> **Status:** Phase 1 in progress. The technical foundation is in place (app
+> shell, design system, settings, EN/IT, tests, CI); the skin editor itself is
+> not built yet. See [`docs/DEVELOPMENT_ROADMAP.md`](docs/DEVELOPMENT_ROADMAP.md).
 
 ## Documentation
 
@@ -22,13 +22,13 @@ gallery, and an optional marketplace.
 | [`docs/MINECRAFT_SKIN_FORMAT.md`](docs/MINECRAFT_SKIN_FORMAT.md) | Skin texture layout, UV regions, classic/slim, legacy format. |
 | [`docs/DEVELOPMENT_ROADMAP.md`](docs/DEVELOPMENT_ROADMAP.md) | Milestones in build order with acceptance criteria. |
 
-## Planned tech stack
+## Tech stack
 
-- TypeScript (strict), React, Vite, React Router, Tailwind CSS, Zustand
+- TypeScript (strict), React 19, Vite 8, React Router, Tailwind CSS 4, Zustand
 - Framework-free skin engine (pure TypeScript) shared by all features
 - HTML Canvas 2D for the pixel editor
-- Three.js + React Three Fiber + Drei for 3D
-- Vitest for tests
+- Three.js + React Three Fiber + Drei for 3D (lazy-loaded)
+- Vitest + Testing Library for unit/component tests, Playwright for e2e
 - Later phases: Supabase (auth, database, storage, Edge Functions for AI),
   Stripe for the marketplace
 
@@ -36,19 +36,33 @@ Dependencies are approved per phase; see `docs/ARCHITECTURE.md` §13.
 
 ## Getting started
 
-Available after roadmap milestone 1.1 (project scaffold):
+Requires Node.js 22.12 or newer.
 
 ```bash
 npm install
 npm run dev
 ```
 
+Then open http://localhost:5173. In development, `/dev/ui` shows the design
+system components and a 3D smoke test.
+
 Checks every change must pass:
 
 ```bash
-npm run typecheck
-npm run lint
-npm run test
+npm run check
+```
+
+End-to-end tests (first run: `npx playwright install chromium`):
+
+```bash
+npm run test:e2e
+```
+
+Production build:
+
+```bash
+npm run build
+npm run preview
 ```
 
 ## Working with AI agents

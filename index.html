@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- Brand text: keep in sync with src/app/brand.ts (decision D2). -->
+    <title>Minecraft Skin Studio</title>
+    <meta
+      name="description"
+      content="Design every pixel. Customize every detail. Bring your character to life."
+    />
+    <meta name="theme-color" content="#0a0c0e" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <script>
+      // Apply saved theme/accent before first paint to avoid a flash.
+      // Mirrors src/app/ThemeController.tsx; key from src/state/settings.ts.
+      (function () {
+        try {
+          var raw = localStorage.getItem('mss.settings');
+          var s = raw ? JSON.parse(raw).state || {} : {};
+          var root = document.documentElement;
+          var light = window.matchMedia('(prefers-color-scheme: light)').matches;
+          var theme = s.theme === 'light' || (s.theme === 'system' && light) ? 'light' : 'dark';
+          root.dataset.theme = theme;
+          if (typeof s.accent === 'string' && /^#[0-9a-f]{6}$/i.test(s.accent)) {
+            root.style.setProperty('--accent', s.accent);
+          }
+          if (s.language === 'it') root.lang = 'it';
+        } catch (e) {
+          /* storage unavailable: defaults apply */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
