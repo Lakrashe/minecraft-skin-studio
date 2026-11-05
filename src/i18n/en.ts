@@ -34,6 +34,8 @@ export const en = {
   settings: {
     title: 'Settings',
     intro: 'Preferences are saved on this device automatically.',
+    notSaved:
+      "Preferences can't be saved on this device right now. Changes apply until you close or reload the page.",
     appearance: 'Appearance',
     theme: 'Theme',
     themeDark: 'Dark',

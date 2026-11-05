@@ -33,16 +33,17 @@ conflict with `PROJECT_RULES.md`, `PROJECT_RULES.md` wins.
 
 ## Commands
 
-Requires Node.js ≥ 22.12 (CI uses the version in `.nvmrc`).
+Requires Node.js `^22.22.2 || ^24.15.0 || >=26` (enforced by `.npmrc` `engine-strict`;
+CI tests 22.22.2, 24 and 26).
 
 ```bash
 npm install          # install dependencies
 npm run dev          # start the Vite dev server (http://localhost:5173)
 npm run check        # typecheck + lint + format check + unit tests
-npm run typecheck    # tsc -b --noEmit
+npm run typecheck    # tsc -b --noEmit (app, DOM-free engine/rig, tooling, e2e)
 npm run lint         # eslint (includes module-boundary rules)
 npm run format       # prettier --write (code only; Markdown is hand-formatted)
-npm run test         # vitest run (node + jsdom projects)
+npm run test         # vitest run (node, jsdom and lint-boundary projects)
 npm run test:e2e     # playwright: builds, serves, tests desktop + mobile
 npm run build        # production build
 ```

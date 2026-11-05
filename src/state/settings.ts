@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
+import { createJSONStorage, persist } from 'zustand/middleware';
 import { DEFAULT_LANGUAGE, detectLanguage, isLanguage, type Language } from '@/i18n';
+import { browserLocalStorage, createResilientStorage } from './resilient-storage';
 
 export const THEME_PREFERENCES = ['dark', 'light', 'system'] as const;
 export type ThemePreference = (typeof THEME_PREFERENCES)[number];
@@ -80,33 +81,8 @@ export function sanitizeSettings(raw: unknown, fallback: SettingsValues): Settin
   };
 }
 
-/**
- * localStorage when usable; otherwise (private mode, blocked storage, non-browser
- * runtimes) an in-memory store so the app keeps working without persistence.
- */
-function browserStorage(): StateStorage {
-  try {
-    const storage = (globalThis as { localStorage?: Storage }).localStorage;
-    if (storage && typeof storage.setItem === 'function') {
-      const probe = '__mss_probe__';
-      storage.setItem(probe, probe);
-      storage.removeItem(probe);
-      return storage;
-    }
-  } catch {
-    // fall through to memory storage
-  }
-  const memory = new Map<string, string>();
-  return {
-    getItem: (key) => memory.get(key) ?? null,
-    setItem: (key, value) => {
-      memory.set(key, value);
-    },
-    removeItem: (key) => {
-      memory.delete(key);
-    },
-  };
-}
+// Never throws: storage failures fall back to memory and flip usePersistenceStatus.
+const settingsStorage = createResilientStorage(browserLocalStorage);
 
 export const useSettings = create<SettingsState>()(
   persist(
@@ -131,7 +107,7 @@ export const useSettings = create<SettingsState>()(
     {
       name: SETTINGS_STORAGE_KEY,
       version: SETTINGS_VERSION,
-      storage: createJSONStorage(browserStorage),
+      storage: createJSONStorage(() => settingsStorage),
       partialize: ({ theme, accent, language, motion }): SettingsValues => ({
         theme,
         accent,

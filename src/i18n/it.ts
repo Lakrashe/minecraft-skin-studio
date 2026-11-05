@@ -30,6 +30,8 @@ export const it: Dictionary = {
   settings: {
     title: 'Impostazioni',
     intro: 'Le preferenze vengono salvate automaticamente su questo dispositivo.',
+    notSaved:
+      'Al momento non è possibile salvare le preferenze su questo dispositivo. Le modifiche restano valide finché non chiudi o ricarichi la pagina.',
     appearance: 'Aspetto',
     theme: 'Tema',
     themeDark: 'Scuro',

@@ -38,6 +38,16 @@ import/export, local projects, and a landing page.
 - Three.js + R3F + Drei installed; lazy `SceneCanvas` in its own chunk.
 - **Accept:** clean clone installs and passes all checks; a forbidden import fails lint; a missing Italian key fails typecheck.
 
+### 1.1–1.2 audit corrections ✅
+An independent foundation audit (2026-11-05) found no P0/P1 issues. Applied:
+failure-safe settings storage with an honest "can't be saved" notice; WebGL2-only
+detection plus a renderer-failure fallback; DOM-free engine/rig typecheck,
+dynamic-import and deep-import lint bans with fixture tests; tooltip Escape
+dismissal, hoverable bubble and preserved `aria-describedby`; Node `engines`
+aligned with locked tools and tested in CI; i18n empty-value test fixed; e2e
+checks runtime errors in every test. The minimatch dev-tool advisory is
+recorded as accepted risk (ARCHITECTURE §13).
+
 ### 1.2 Design system and app shell ✅
 *Done; Tabs and Splitter are deferred to 1.14, where the editor layout first
 needs them (no unused components).*

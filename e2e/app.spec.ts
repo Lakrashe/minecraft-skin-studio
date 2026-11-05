@@ -1,14 +1,25 @@
-import { expect, test, type Page } from '@playwright/test';
+import { test as base, expect, type Page } from '@playwright/test';
 
-/** Fails the test on any console error or uncaught exception. */
-function trackErrors(page: Page): string[] {
-  const errors: string[] = [];
-  page.on('console', (msg) => {
-    if (msg.type() === 'error') errors.push(msg.text());
-  });
-  page.on('pageerror', (err) => errors.push(err.message));
-  return errors;
-}
+/**
+ * Every test fails on any console error or uncaught page exception
+ * (auto fixture), so error handling is checked across all flows.
+ */
+const test = base.extend<{ runtimeErrors: string[] }>({
+  runtimeErrors: [
+    async ({ page }, use) => {
+      const errors: string[] = [];
+      page.on('console', (msg) => {
+        if (msg.type() === 'error') errors.push(msg.text());
+      });
+      page.on('pageerror', (err) => errors.push(err.message));
+      await use(errors);
+      expect(errors, 'console errors / uncaught exceptions').toEqual([]);
+    },
+    { auto: true },
+  ],
+});
+
+const NOT_SAVED = /can't be saved on this device/;
 
 async function openNav(page: Page) {
   const menuButton = page.getByRole('button', { name: 'Open menu' });
@@ -18,24 +29,26 @@ async function openNav(page: Page) {
 test.beforeEach(async ({ page }) => {
   // Start every test in English regardless of the runner's locale.
   await page.addInitScript(() => {
-    if (!localStorage.getItem('mss.settings')) {
-      localStorage.setItem(
-        'mss.settings',
-        JSON.stringify({ state: { language: 'en' }, version: 1 }),
-      );
+    try {
+      if (!localStorage.getItem('mss.settings')) {
+        localStorage.setItem(
+          'mss.settings',
+          JSON.stringify({ state: { language: 'en' }, version: 1 }),
+        );
+      }
+    } catch {
+      // Storage may be deliberately disabled by a test.
     }
   });
 });
 
-test('home page renders the hero without errors', async ({ page }) => {
-  const errors = trackErrors(page);
+test('home page renders the hero', async ({ page }) => {
   await page.goto('/');
   await expect(
     page.getByRole('heading', { level: 1, name: 'Create Your Own Minecraft Identity.' }),
   ).toBeVisible();
   await expect(page).toHaveTitle(/Home · /);
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-  expect(errors).toEqual([]);
 });
 
 test('navigates to settings and back', async ({ page }) => {
@@ -44,6 +57,12 @@ test('navigates to settings and back', async ({ page }) => {
   await page.getByRole('link', { name: 'Settings' }).first().click();
   await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible();
   await expect(page).toHaveURL(/\/settings$/);
+
+  await page.goBack();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Create Your Own Minecraft Identity.' }),
+  ).toBeVisible();
 });
 
 test('theme and accent persist across reloads', async ({ page }) => {
@@ -82,8 +101,69 @@ test('reset settings asks for confirmation and shows a toast', async ({ page }) 
   const dialog = page.getByRole('dialog', { name: 'Reset all settings?' });
   await expect(dialog).toBeVisible();
   await dialog.getByRole('button', { name: 'Reset', exact: true }).click();
+  await expect(dialog).toBeHidden();
   await expect(page.getByRole('status').filter({ hasText: 'Settings reset' })).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+});
+
+test.describe('when settings cannot be saved', () => {
+  test('a write failure after startup is handled and reported honestly', async ({ page }) => {
+    await page.goto('/settings');
+    await expect(
+      page.getByText('Preferences are saved on this device automatically.'),
+    ).toBeVisible();
+
+    // Simulate quota exhaustion after the app has started.
+    await page.evaluate(() => {
+      Storage.prototype.setItem = () => {
+        throw new DOMException('Quota exceeded', 'QuotaExceededError');
+      };
+    });
+
+    await page.getByRole('radio', { name: 'Light' }).click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    await expect(page.getByRole('status').filter({ hasText: NOT_SAVED }).first()).toBeVisible();
+
+    // Reset still completes: dialog closes, success toast, defaults applied.
+    await page.getByRole('button', { name: 'Reset settings' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Reset all settings?' });
+    await dialog.getByRole('button', { name: 'Reset', exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByRole('status').filter({ hasText: 'Settings reset' })).toBeVisible();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  });
+
+  test('storage denied at startup still gives a working app', async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(window, 'localStorage', {
+        configurable: true,
+        get() {
+          throw new DOMException('Access denied', 'SecurityError');
+        },
+      });
+    });
+    await page.goto('/settings');
+    await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible();
+    await expect(page.getByRole('status').filter({ hasText: NOT_SAVED }).first()).toBeVisible();
+
+    await page.getByRole('radio', { name: 'Light' }).click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  });
+});
+
+test('tooltips open on keyboard focus and close with Escape', async ({ page }) => {
+  await page.goto('/');
+  const trigger = page.getByRole('button', { name: 'Switch to light theme' });
+  for (let i = 0; i < 10 && !(await trigger.evaluate((el) => el === document.activeElement)); i++) {
+    await page.keyboard.press('Tab');
+  }
+  await expect(trigger).toBeFocused();
+
+  const tooltip = page.locator('[role="tooltip"]', { hasText: 'Switch to light theme' });
+  await expect(tooltip).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(tooltip).toBeHidden();
+  await expect(trigger).toBeFocused();
 });
 
 test('unknown routes show the 404 page', async ({ page }) => {

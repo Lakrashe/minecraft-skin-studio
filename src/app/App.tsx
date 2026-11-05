@@ -4,6 +4,7 @@ import { I18nProvider } from '@/i18n';
 import { useSettings } from '@/state';
 import { Toaster } from '@/ui';
 import { createRoutes } from './routes';
+import { PersistenceNotice } from './PersistenceNotice';
 import { ThemeController } from './ThemeController';
 
 export function App() {
@@ -13,6 +14,7 @@ export function App() {
   return (
     <I18nProvider language={language}>
       <ThemeController />
+      <PersistenceNotice />
       <RouterProvider router={router} />
       <Toaster />
     </I18nProvider>

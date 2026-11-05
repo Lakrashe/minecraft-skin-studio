@@ -14,3 +14,4 @@ export {
   type SettingsValues,
   type ThemePreference,
 } from './settings';
+export { createResilientStorage, usePersistenceStatus } from './resilient-storage';

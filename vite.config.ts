@@ -33,6 +33,16 @@ export default defineConfig({
       {
         extends: true,
         test: {
+          name: 'tooling',
+          environment: 'node',
+          include: ['tests/**/*.test.ts'],
+          // Type-aware ESLint runs are slow on first use.
+          testTimeout: 60_000,
+        },
+      },
+      {
+        extends: true,
+        test: {
           name: 'dom',
           environment: 'jsdom',
           include: ['src/**/*.test.tsx'],

@@ -4,8 +4,11 @@ Technical architecture for the full platform described in `docs/SPECIFICATION.md
 The rules it implements are in `PROJECT_RULES.md` §1. Build order is in
 `docs/DEVELOPMENT_ROADMAP.md`.
 
-Status: **approved design** (decisions D1, D3–D5 approved 2026-11-05) —
-nothing is implemented yet. Decisions are summarized in §12.
+Status: **approved design** (decisions D1, D3–D5 approved 2026-11-05).
+Implemented so far: the Phase 1 foundation (milestones 1.1–1.2) — tooling,
+module layout and boundaries, design system, app shell, settings, i18n and the
+lazy 3D canvas. The skin engine, editor, renderer and persistence sections below
+are design, not yet implementation. Decisions are summarized in §12.
 
 ---
 
@@ -113,8 +116,10 @@ public/              favicon, manifest
   `three` statically; Vite's `codeSplitting` puts three/@react-three in a `three`
   chunk. Pages without 3D never download it.
 - `SceneCanvas` sets project defaults (DPR cap, transparent background, camera
-  aimed at the player model center) and renders a caller-supplied fallback when
-  WebGL is unavailable.
+  aimed at the player model center). It renders the caller-supplied fallback
+  when WebGL2 is unavailable (Three.js ≥ r163 has no WebGL1 support, so
+  WebGL1-only devices count as unsupported) and, through `RenderErrorBoundary`,
+  when the renderer fails to start.
 
 ### Import boundaries (enforced by ESLint `no-restricted-imports`)
 
@@ -132,8 +137,16 @@ public/              favicon, manifest
 | `features/*` | everything except `app`; other features only via their `index.ts` |
 | `app` | everything |
 
-`engine` and `rig` also may not import React, React Router, Zustand or Three.js.
-The rules live in `eslint.config.js`.
+How the boundaries are enforced:
+- `eslint.config.js` bans forbidden modules for **static and dynamic**
+  (`import()`) imports, and bans deep imports into another module — only its
+  public entry (`@/ui`, `@/features/settings`) may be imported.
+- `engine` and `rig` may not import React, React Router, Zustand or Three.js,
+  and may not use browser globals (`no-restricted-globals`).
+- `tsconfig.engine.json` type-checks `engine` and `rig` with no DOM library,
+  so any browser API fails `npm run typecheck`.
+- `tests/tooling/boundaries.test.ts` lints fixtures to prove each rule rejects
+  violations and accepts legal imports.
 
 `editor2d` ✗ `renderer3d` in both directions. Features that show both views
 (editor, compare) compose them; the views never know about each other.
@@ -411,9 +424,13 @@ Proposed pipeline:
 | Data | Phase 1–3 | Phase 4+ |
 |---|---|---|
 | Projects, versions, thumbnails | IndexedDB (`platform/idb`, small own wrapper) | + Supabase Storage/Postgres sync when signed in |
-| Settings, palettes, recent colors, custom poses, favorites | localStorage via Zustand `persist` | synced to profile when signed in |
+| Settings, palettes, recent colors, custom poses, favorites | localStorage via Zustand `persist`, through `createResilientStorage` | synced to profile when signed in |
 | Autosave | debounced (default 2 s after last change) to IndexedDB; interval configurable | same |
 
+- Storage never throws into the UI: `createResilientStorage` (src/state)
+  mirrors values in memory, falls back to memory on any read/write failure, and
+  sets `usePersistenceStatus().persistent = false`; the app then tells the user
+  that preferences can't be saved instead of claiming they were.
 - Call `navigator.storage.persist()` to reduce eviction risk; offer "export
   project file" for backups.
 - Project file (`.mss.json`): `schemaVersion`, metadata, layers as base64 PNG.
@@ -496,3 +513,14 @@ Tailwind 4, Vitest 5, ESLint 10, Three 0.187, R3F 9, Drei 10, Zustand 5).
 Explicitly **not** used (write our own): UI kits, icon packs beyond a small
 inline SVG set, i18n frameworks (typed dictionaries suffice for 2 languages),
 color-picker libraries, IndexedDB libraries, resizable-panel libraries.
+
+### Node.js support
+`package.json` `engines`: `^22.22.2 || ^24.15.0 || >=26.0.0` — the intersection
+of the locked tools' requirements (jsdom, Vitest, React Router; Node 25 is
+excluded by jsdom and Vitest). `.npmrc` sets `engine-strict=true`, and CI runs
+the checks on Node 22.22.2, 24 and 26.
+
+### Known advisories (accepted risk)
+| Advisory | Where | Status |
+|---|---|---|
+| [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249) — minimatch glob-pattern amplification (moderate) | Dev tooling only: eslint 10.14 and typescript-eslint 8.72 depend on minimatch `^10.2.x`; reported as 10 npm audit entries for one advisory | **Accepted for now (2026-11-05).** No patched 10.x exists; the fix is in 11.x, which the latest ESLint/typescript-eslint do not support. Forcing it with `overrides` risks breaking lint. Exposure is limited: only our fixed lint globs are evaluated, never attacker input, and `npm audit --omit=dev` reports 0. Re-check when ESLint or typescript-eslint updates. Do not run `npm audit fix --force` (it proposes tool downgrades). |

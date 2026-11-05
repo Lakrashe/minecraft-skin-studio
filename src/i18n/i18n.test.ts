@@ -10,16 +10,29 @@ function keyPaths(node: unknown, prefix = ''): string[] {
   );
 }
 
+/** Paths of leaves that are blank, read directly from the dictionary (no fallback). */
+function emptyLeaves(node: unknown, prefix = ''): string[] {
+  if (typeof node === 'string') return node.trim() === '' ? [prefix] : [];
+  return Object.entries(node as Record<string, unknown>).flatMap(([key, value]) =>
+    emptyLeaves(value, prefix ? `${prefix}.${key}` : key),
+  );
+}
+
 describe('i18n dictionaries', () => {
   test('Italian has exactly the same keys as English', () => {
     expect(keyPaths(it).sort()).toEqual(keyPaths(en).sort());
   });
 
-  test('no translation is empty', () => {
-    for (const dict of [en, it]) {
-      const values = keyPaths(dict).map((path) => createTranslator('en')(path as never));
-      expect(values.every((v) => v.trim().length > 0)).toBe(true);
-    }
+  test.each([
+    ['en', en],
+    ['it', it],
+  ])('no %s translation is empty', (_language, dictionary) => {
+    expect(emptyLeaves(dictionary)).toEqual([]);
+  });
+
+  test('the empty-value check detects an empty Italian leaf', () => {
+    const broken = { ...it, nav: { ...it.nav, settings: '  ' } };
+    expect(emptyLeaves(broken)).toEqual(['nav.settings']);
   });
 
   test('placeholders match between languages', () => {

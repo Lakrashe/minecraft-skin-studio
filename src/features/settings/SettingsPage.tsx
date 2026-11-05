@@ -1,6 +1,12 @@
 import { useState, type ReactNode } from 'react';
 import { LANGUAGES, useT, type Language } from '@/i18n';
-import { ACCENT_PRESETS, useSettings, type MotionPreference, type ThemePreference } from '@/state';
+import {
+  ACCENT_PRESETS,
+  usePersistenceStatus,
+  useSettings,
+  type MotionPreference,
+  type ThemePreference,
+} from '@/state';
 import { Button, cn, Dialog, Icon, Panel, SegmentedControl, Select, toast, Tooltip } from '@/ui';
 
 function AccentPicker() {
@@ -66,6 +72,7 @@ export function SettingsPage() {
   const t = useT();
   const { theme, language, motion, setTheme, setLanguage, setMotion, reset } = useSettings();
   const [confirmReset, setConfirmReset] = useState(false);
+  const persistent = usePersistenceStatus((s) => s.persistent);
 
   const themeOptions: { value: ThemePreference; label: string; icon: ReactNode }[] = [
     { value: 'dark', label: t('settings.themeDark'), icon: <Icon name="moon" size={16} /> },
@@ -86,7 +93,17 @@ export function SettingsPage() {
     <div className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6 sm:py-14">
       <header className="mb-8 animate-fade-in">
         <h1 className="font-display text-3xl font-bold tracking-tight">{t('settings.title')}</h1>
-        <p className="mt-2 text-muted">{t('settings.intro')}</p>
+        {persistent ? (
+          <p className="mt-2 text-muted">{t('settings.intro')}</p>
+        ) : (
+          <p
+            role="status"
+            className="mt-3 flex items-start gap-2 rounded-control border border-warning/40 bg-warning/10 p-3 text-sm text-fg"
+          >
+            <Icon name="alert" size={18} className="mt-0.5 shrink-0 text-warning" />
+            {t('settings.notSaved')}
+          </p>
+        )}
       </header>
 
       <div className="flex flex-col gap-6">
