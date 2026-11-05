@@ -41,7 +41,8 @@ import/export, local projects, and a landing page.
   colors), typography, radii, motion with reduced-motion support.
 - Primitives: Button, IconButton, Panel, Tooltip, Toast, Dialog, Tabs, Slider,
   Toggle, Input, Splitter, Spinner/loading states, Kbd.
-- Original logo + favicon (no Mojang logo likeness).
+- Original logo + favicon (no Mojang logo likeness), designed so the wordmark
+  can be swapped when the brand is renamed (D2); `src/app/brand.ts`.
 - Shell: header navigation (only built pages), responsive layout, error
   boundary, 404 page.
 - **Accept:** theme and accent switch live and persist; all primitives keyboard-accessible; layouts work at phone/tablet/desktop widths.
@@ -189,7 +190,7 @@ import/export, local projects, and a landing page.
 
 | # | Risk | Impact | Mitigation |
 |---|---|---|---|
-| R1 | **Brand/trademark:** Mojang's usage guidelines restrict using "Minecraft" in product names and logos. | Takedown, forced rename after launch | Decide name early (e.g. "Skin Studio for Minecraft" style, plus non-affiliation notice); original logo; no Mojang assets. Owner decision D2. |
+| R1 | **Brand/trademark:** Mojang's usage guidelines restrict using "Minecraft" in product names and logos. | Takedown, forced rename after launch | Rename before public launch (D2, deferred); brand text centralized so the rename is one change; non-affiliation notice; original logo; no Mojang assets. |
 | R2 | **UV/orientation errors** (bottom faces, mirrored limbs, slim arms). | Skins look wrong in game | Region tables as single source; golden tests; one-time manual in-game verification of a test skin per model. |
 | R3 | **AI output validity:** image models can't produce UV-correct skins. | Unusable AI feature | Recipe + composer pipeline (ARCHITECTURE §9); quality depends on parts library breadth. |
 | R4 | **AI cost and abuse.** | Unbounded bills | Server-side rate limits, quotas, optional account requirement (D7), request size limits. |
@@ -205,8 +206,9 @@ import/export, local projects, and a landing page.
 | R14 | **Supabase RLS mistakes** expose private data. | Data leak | RLS on every table, policy tests, least-privilege functions. |
 | R15 | **Open Graph with an SPA.** | No social previews | Rewrite share URLs to an OG function; client-rendered OG images at publish time. |
 
-## Decisions needed before Phase 1
+## Decisions
 
-See `docs/PROJECT_OVERVIEW.md` §Decisions: D1 (Vite vs Next.js), D2 (brand
-name), D3 (Phase 1 tool scope), D4 (landing sections without fake data),
-D5 (AI approach, affects Phase 2 composer design).
+All pre-Phase-1 decisions are settled (see `docs/PROJECT_OVERVIEW.md`
+§Decisions): D1, D3, D4, D5 approved; D2 (brand rename) deferred to before
+public launch. Still open: D6 hosting (before Phase 4), D7 AI access for
+anonymous users (before Phase 3), D8 marketplace legal setup (before Phase 5).
