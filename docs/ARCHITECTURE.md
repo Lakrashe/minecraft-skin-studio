@@ -4,8 +4,8 @@ Technical architecture for the full platform described in `docs/SPECIFICATION.md
 The rules it implements are in `PROJECT_RULES.md` §1. Build order is in
 `docs/DEVELOPMENT_ROADMAP.md`.
 
-Status: **proposed, awaiting owner approval** — nothing is implemented yet.
-Decisions still open are listed in §12.
+Status: **approved design** (decisions D1, D3–D5 approved 2026-11-05) —
+nothing is implemented yet. Decisions are summarized in §12.
 
 ---
 
@@ -409,17 +409,24 @@ Counters maintained by triggers; trending via a scored view/materialized view.
 - Moderation: report flow, admin review queue, automated checks on text
   (and optionally images) before content is public.
 
-## 12. Open decisions (need owner approval)
+## 12. Decisions
 
-1. **Vite SPA + Supabase Edge Functions** (recommended) vs **Next.js**.
-2. **Brand name** — "Minecraft" in a product name conflicts with Mojang's brand
-   guidelines; see roadmap risks.
-3. **Phase 1 scope interpretation** — all editor tools from spec §3 in Phase 1;
-   the advanced color features from spec §21 (harmony, global replace) in Phase 2.
-4. **Landing page in Phase 1** — community sections (featured, trending,
-   creators, statistics, testimonials) appear in Phase 4 when real data exists.
-5. **AI approach** — recipe + composer (§9) rather than raw image generation.
-6. **Hosting provider** for the SPA and rewrites (decide before Phase 4).
+Owner decisions are recorded in `docs/PROJECT_OVERVIEW.md` §Decisions.
+Architectural consequences:
+
+- **D1 (approved):** Vite SPA + Supabase. No Next.js; server code lives only in
+  Supabase Edge Functions (plus a host rewrite for OG pages, §11.1).
+- **D2 (deferred):** the brand will be renamed later. All brand text (product
+  name, tagline, logo alt text, page titles, meta tags, manifest) comes from
+  one place — `src/app/brand.ts` plus the i18n dictionaries — so a rename is a
+  one-file change. No brand name in file names, CSS classes, storage keys, or
+  identifiers. Storage keys and the project file extension use a neutral
+  prefix (`mss`) that survives the rename.
+- **D3 (approved):** all spec §3 editor tools in Phase 1; spec §21 advanced
+  color features in Phase 2.
+- **D4 (approved):** landing community sections wait for Phase 4 real data.
+- **D5 (approved):** AI via recipe + composer (§9).
+- **D6 (open, before Phase 4):** hosting provider for the SPA and rewrites.
 
 ## 13. Dependencies
 

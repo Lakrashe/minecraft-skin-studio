@@ -199,6 +199,10 @@ From the specification (§27, §28): every visible control must work.
 - Comments explain *why*, not *what*. Cite `docs/MINECRAFT_SKIN_FORMAT.md` when
   encoding a format rule.
 - Tests live next to code as `*.test.ts`. Engine tests must not need a DOM.
+- **Brand name in one place.** The product name is a working name that will
+  change (decision D2). Brand text comes only from `src/app/brand.ts` and the
+  i18n dictionaries. Never put the brand name in identifiers, file names, CSS
+  classes, storage keys, or URLs; use the neutral `mss` prefix for keys.
 
 ---
 

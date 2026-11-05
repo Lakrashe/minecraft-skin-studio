@@ -71,11 +71,11 @@ Recorded owner decisions and clarifications. Pending items are in
 
 | # | Decision | Status |
 |---|---|---|
-| D1 | Frontend: Vite SPA + Supabase Edge Functions (vs Next.js) | Proposed |
-| D2 | Brand name and trademark handling | Open |
-| D3 | All spec §3 editor tools in Phase 1; spec §21 advanced color in Phase 2 | Proposed |
-| D4 | Landing community sections deferred to Phase 4 (no fake data) | Proposed |
-| D5 | AI via structured recipes + procedural composer | Proposed |
+| D1 | Frontend: Vite SPA + Supabase (no Next.js) | **Approved** 2026-11-05 |
+| D2 | Brand name: keep "Minecraft Skin Studio" as a working name; rename before public launch. Brand text kept in one place so the rename is trivial (ARCHITECTURE §12) | **Deferred** 2026-11-05 |
+| D3 | All spec §3 editor tools in Phase 1; spec §21 advanced color in Phase 2 | **Approved** 2026-11-05 (owner delegated the choice) |
+| D4 | Landing community sections deferred to Phase 4 (no fake data) | **Approved** 2026-11-05 |
+| D5 | AI via structured recipes + procedural composer | **Approved** 2026-11-05 |
 | D6 | Hosting provider | Open (needed by Phase 4) |
 | D7 | AI access for anonymous users (rate-limited) vs account required | Open (needed by Phase 3) |
 | D8 | Marketplace legal setup (seller entity, VAT/tax, payouts, age policy) | Open (needed by Phase 5) |
