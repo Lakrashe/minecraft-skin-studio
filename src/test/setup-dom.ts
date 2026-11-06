@@ -30,6 +30,10 @@ if (typeof win.matchMedia !== 'function') {
     }) as unknown as MediaQueryList;
 }
 
+// jsdom has no canvas backend; report "no context" quietly (views then skip drawing).
+HTMLCanvasElement.prototype.getContext = (() =>
+  null) as typeof HTMLCanvasElement.prototype.getContext;
+
 // jsdom does not implement scrolling (used by <ScrollRestoration />).
 window.scrollTo = () => undefined;
 

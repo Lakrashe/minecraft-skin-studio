@@ -15,3 +15,4 @@ export {
   type ThemePreference,
 } from './settings';
 export { createResilientStorage, usePersistenceStatus } from './resilient-storage';
+export { resolveMotion, useMediaQuery, useReducedMotion, type ResolvedMotion } from './media';

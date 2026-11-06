@@ -55,3 +55,29 @@ describe('SceneCanvas', () => {
     expect(screen.getByText('3D unavailable')).toBeTruthy();
   });
 });
+
+describe('SceneCanvas overlay', () => {
+  beforeEach(() => {
+    webgl.available = true;
+    fiber.fail = false;
+  });
+
+  it('shows overlay controls with the 3D view but never with the fallback', () => {
+    const overlay = <button type="button">Pause animation</button>;
+    const { unmount } = render(
+      <SceneCanvas label="Preview" fallback={fallback} overlay={overlay}>
+        {null}
+      </SceneCanvas>,
+    );
+    expect(screen.getByRole('button', { name: 'Pause animation' })).toBeTruthy();
+    unmount();
+
+    webgl.available = false;
+    render(
+      <SceneCanvas label="Preview" fallback={fallback} overlay={overlay}>
+        {null}
+      </SceneCanvas>,
+    );
+    expect(screen.queryByRole('button', { name: 'Pause animation' })).toBeNull();
+  });
+});

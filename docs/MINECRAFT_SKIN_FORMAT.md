@@ -67,8 +67,10 @@ v+d+h└───────┴─────────┴──────
 "Right"/"left" here are the cuboid's sides as named in the net: the "right" face
 is the one on the **left** of the net. Name faces consistently in code
 (`top | bottom | right | front | left | back`) and never mix with
-screen-relative directions. Exact in-game orientation of top/bottom faces
-(including any vertical flip of the bottom face) **(verify)**.
+screen-relative directions. The 3D renderer maps the bottom face flipped
+vertically relative to the other faces, the convention used by established
+skin renderers; confirm against the game with an asymmetric test skin
+**(verify)**.
 
 ---
 
@@ -186,12 +188,15 @@ supported, and any warnings found (e.g. transparent inner-layer pixels).
 
 Units: 1 texture pixel = 1 model unit; player is 32 units tall.
 
-| Part | Size (w×h×d) | Pivot / position (relative to feet center) |
-|---|---|---|
-| Head | 8×8×8 | sits on top of body, y 24–32 |
-| Body | 8×12×4 | y 12–24 |
-| Arms | 4×12×4 (slim 3×12×4) | beside body, y 12–24 |
-| Legs | 4×12×4 | y 0–12, x ±2 from center |
+The player faces +z; their right side is −x.
 
-Exact pivots for animation follow the spec; static T-pose/stand-pose is enough
-for the MVP.
+| Part | Size (w×h×d) | Pivot (joint) | Box center |
+|---|---|---|---|
+| Head | 8×8×8 | (0, 24, 0) neck | y 28 |
+| Body | 8×12×4 | (0, 24, 0) | y 18 |
+| Right arm | 4×12×4 (slim 3×12×4) | (−5, 22, 0) shoulder | x −(4 + w/2), y 18 |
+| Left arm | same | (5, 22, 0) | x 4 + w/2, y 18 |
+| Right leg | 4×12×4 | (−2, 12, 0) hip | x −2, y 6 |
+| Left leg | 4×12×4 | (2, 12, 0) | x 2, y 6 |
+
+Implemented and tested in `src/renderer3d/player-geometry.ts`.

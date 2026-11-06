@@ -33,3 +33,4 @@ export { Switch, type SwitchProps } from './Switch';
 export { Toaster } from './toast/Toaster';
 export { toast, useToastStore, type Toast, type ToastTone } from './toast/toast-store';
 export { Tooltip, type TooltipAlign, type TooltipProps } from './Tooltip';
+export { useVisibility, type Visibility } from './use-visibility';

@@ -13,6 +13,8 @@ export default defineConfig({
   forbidOnly: isCI,
   retries: isCI ? 2 : 0,
   ...(isCI ? { workers: 1 } : {}),
+  // Software WebGL in parallel workers is CPU-heavy; allow slower assertions.
+  expect: { timeout: 10_000 },
   reporter: isCI ? [['github'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL: `http://localhost:${String(PORT)}`,

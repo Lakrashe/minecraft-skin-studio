@@ -8,5 +8,9 @@
 import { lazy } from 'react';
 
 export const LazySceneCanvas = lazy(() => import('./SceneCanvas'));
+export const LazyPlayerViewer = lazy(() => import('./PlayerViewer'));
 export type { SceneCanvasProps } from './SceneCanvas';
+export type { PlayerViewerProps } from './PlayerViewer';
+export { CAMERA_VIEWS, type CameraView } from './camera-views';
+export { viewerFrameLoop, type FrameLoop } from './frame-loop';
 export { isWebGLAvailable } from './webgl';

@@ -79,3 +79,5 @@ Recorded owner decisions and clarifications. Pending items are in
 | D6 | Hosting provider | Open (needed by Phase 4) |
 | D7 | AI access for anonymous users (rate-limited) vs account required | Open (needed by Phase 3) |
 | D8 | Marketplace legal setup (seller entity, VAT/tax, payouts, age policy) | Open (needed by Phase 5) |
+| D9 | Homepage shows original sample characters instead of "featured skins" until real community data exists; no creators, likes or counts | **Approved** 2026-11-05 |
+| D10 | The Studio (`/editor`) is public in viewer mode, showing only working parts; the hero CTA says "Open the Studio" until drawing works | **Approved** 2026-11-05 |

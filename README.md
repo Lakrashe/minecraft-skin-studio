@@ -5,9 +5,9 @@ accurate UV mapping and a synchronized real-time 3D preview at its core, plus
 templates, outfits, poses, cinematic renders, AI generation, a community
 gallery, and an optional marketplace.
 
-> **Status:** Phase 1 in progress. The technical foundation is in place (app
-> shell, design system, settings, EN/IT, tests, CI); the skin editor itself is
-> not built yet. See [`docs/DEVELOPMENT_ROADMAP.md`](docs/DEVELOPMENT_ROADMAP.md).
+> **Status:** Phase 1 in progress. The foundation, the homepage (with a live 3D
+> character) and the Studio in viewer mode (2D texture + 3D preview of original
+> sample characters) are built. Editing, import and export are not built yet. See [`docs/DEVELOPMENT_ROADMAP.md`](docs/DEVELOPMENT_ROADMAP.md).
 
 ## Documentation
 
