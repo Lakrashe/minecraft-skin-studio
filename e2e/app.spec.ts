@@ -384,13 +384,23 @@ test.describe('studio', () => {
     await page.getByRole('switch', { name: 'Face labels' }).click();
     if (isMobile) await page.getByRole('radio', { name: '2D texture' }).click();
     const texture = page.getByRole('img', { name: /64×64 skin texture/ });
+    const zoom = page.getByRole('region', { name: '2D texture' }).locator('output');
     await texture.focus();
-    await page.keyboard.press('+'); // zoom 8× or more: labels are readable
-    await page.keyboard.press('+');
-    await expect
-      .poll(async () => Number((await labels.getAttribute('data-labels')) ?? '0'))
-      .toBeGreaterThan(40);
-    for (let i = 0; i < 12; i++) await page.keyboard.press('-'); // down to 2×
+    // How many labels fit at a middle zoom depends on the platform's font
+    // metrics, so check the two font-independent ends instead. At 24× even the
+    // smallest face (4×4 → 96 px) fits its short name, so all 72 are labeled.
+    for (let i = 0; i < 24; i++) await page.keyboard.press('+');
+    await expect(zoom).toHaveText('24×');
+    await expect(labels).toHaveAttribute('data-labels', '72');
+    // Below 6× nothing is drawn: the text could not be read.
+    for (let i = 0; i < 24; i++) await page.keyboard.press('-');
+    await expect(zoom).toHaveText('2×');
+    await expect(labels).toHaveAttribute('data-labels', '0');
+    // Switching them off removes them at any zoom.
+    for (let i = 0; i < 24; i++) await page.keyboard.press('+');
+    await expect(labels).toHaveAttribute('data-labels', '72');
+    if (isMobile) await page.getByRole('radio', { name: 'Tools', exact: true }).click();
+    await page.getByRole('switch', { name: 'Face labels' }).click();
     await expect(labels).toHaveAttribute('data-labels', '0');
   });
 
