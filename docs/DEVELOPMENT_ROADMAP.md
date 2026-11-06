@@ -14,8 +14,9 @@ Implementation plan for `docs/SPECIFICATION.md`, following its five phases
   UI for a feature is added in the same milestone as the feature's logic.
 
 **Status:** Phase 1 in progress. Done: 1.1–1.2 ("Project Foundation") and the
-owner's "Homepage and User Interface" step, which delivered 1.16 and parts of
-1.3, 1.9, 1.10 and 1.14 (marked below). Next, when the owner requests it: finish
+owner's "Homepage and User Interface" step, which built 1.16 (acceptance still
+open: Lighthouse not measured) and parts of 1.3, 1.9, 1.10 and 1.14 (marked
+below); its audit corrections are applied. Next, when the owner requests it: finish
 1.3 (engine core), then 1.4 (document store and history).
 
 > Naming note: the owner called the homepage step "Phase 2". In this roadmap,
@@ -154,14 +155,20 @@ history panel, shortcuts.*
 - Theme, accent, editor preferences, grid settings, autosave settings, animation
   preferences, language (EN/IT), shortcut customization.
 
-### 1.16 Landing page ✅
+### 1.16 Landing page (built; acceptance open)
+*Built in the homepage step; stays open until the Lighthouse criterion below
+is measured.*
 - 3D hero (slow rotation, animated background, headline/subtitle, CTAs),
   feature cards with honest status badges, sample characters (D9), accuracy
   section, FAQ, final CTA, footer.
 - Primary CTA reads "Open the Studio" until drawing works, then "Start
   Creating" (D10). "Explore Community Skins" and community sections arrive in
   Phase 4.
-- Not yet measured: Lighthouse score (run before Phase 1 sign-off).
+- Not yet measured: Lighthouse score (run before Phase 1 sign-off). Also not
+  yet verified: real Firefox/WebKit, physical phones, screen-reader output and
+  in-game skin appearance.
+- 3D views honor reduced motion, pause offscreen, and the homepage character
+  has a pause control (homepage audit corrections).
 - **Accept:** Lighthouse performance ≥ 85 on desktop with 3D lazy-loaded; no fake data.
 
 ---

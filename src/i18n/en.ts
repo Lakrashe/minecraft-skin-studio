@@ -35,6 +35,8 @@ export const en = {
     ctaCharacters: 'Meet the sample characters',
     heroViewerLabel: 'Interactive 3D preview of the {name} sample character. Drag to rotate.',
     dragHint: 'Drag to rotate',
+    pauseMotion: 'Pause animation',
+    playMotion: 'Play animation',
     features: {
       title: 'Everything for your Minecraft look',
       intro:
@@ -82,7 +84,7 @@ export const en = {
     },
     accuracy: {
       title: 'Built for Minecraft accuracy',
-      intro: 'What you see in the studio is exactly what Minecraft will show.',
+      intro: 'The studio uses the same texture regions as Minecraft, checked by automated tests.',
       format: {
         title: '64×64 skin format',
         body: 'The standard texture used by Java Edition and Bedrock Edition custom skins.',
@@ -191,6 +193,9 @@ export const en = {
     play: 'Play animation',
     fullscreen: 'Full screen',
     exitFullscreen: 'Exit full screen',
+    fullscreenFailed: "Full screen isn't available right now. The preview keeps working here.",
+    flatPreviewLabel: 'Flat front view of {name}',
+    flatPreviewNote: 'Showing a flat front view that follows the layer and body-part settings.',
     status: {
       none: 'Hover the texture or use the arrow keys to inspect a pixel',
       pixel: 'Pixel {x}, {y}',

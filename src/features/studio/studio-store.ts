@@ -19,7 +19,11 @@ export interface StudioState {
   readonly focus: BodyPart | 'all';
   readonly zoom: number;
   readonly inspected: Texel | null;
-  readonly animation: AnimationId;
+  /**
+   * The animation the user picked, or `null` for the default: idle, or off
+   * when reduced motion is requested (see `effectiveAnimation`).
+   */
+  readonly animation: AnimationId | null;
   readonly paused: boolean;
   readonly view: CameraView;
   /** Incremented to re-apply the same camera preset. */
@@ -41,6 +45,22 @@ export interface StudioState {
 
 const INITIAL_SAMPLE: SampleId = 'explorer';
 
+function sameTexel(a: Texel | null, b: Texel | null): boolean {
+  return a === b || (a !== null && b !== null && a.x === b.x && a.y === b.y);
+}
+
+/**
+ * The animation to play: the user's explicit choice, otherwise idle — or off
+ * when reduced motion is requested. Choosing an animation is a deliberate
+ * action, so it is honored even under reduced motion.
+ */
+export function effectiveAnimation(
+  chosen: AnimationId | null,
+  reducedMotion: boolean,
+): AnimationId {
+  return chosen ?? (reducedMotion ? 'none' : 'idle');
+}
+
 export const useStudio = create<StudioState>()((set) => ({
   sampleId: INITIAL_SAMPLE,
   model: getSample(INITIAL_SAMPLE).model,
@@ -51,7 +71,7 @@ export const useStudio = create<StudioState>()((set) => ({
   focus: 'all',
   zoom: 8,
   inspected: null,
-  animation: 'idle',
+  animation: null,
   paused: false,
   view: 'reset',
   viewRequest: 0,
@@ -81,8 +101,9 @@ export const useStudio = create<StudioState>()((set) => ({
   setZoom: (zoom) => {
     set({ zoom });
   },
+  // Pointer moves within one texel must not notify subscribers or redraw.
   setInspected: (inspected) => {
-    set({ inspected });
+    set((s) => (sameTexel(s.inspected, inspected) ? s : { inspected }));
   },
   setAnimation: (animation) => {
     set({ animation, paused: false });

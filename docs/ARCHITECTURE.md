@@ -336,6 +336,33 @@ interface DocumentStore {
 - `features/studio`: Studio layout (left view panel, center texture, right 3D,
   status bar; tabs on phones). `useStudio` (Zustand) holds view state only;
   pixels come from the selected sample until the document store exists.
+  Panels subscribe to the fields they use (`useShallow`), and pointer moves
+  within one texel do not update the store. `TextureView` draws on two
+  canvases: the base (texture, grid, outlines) redraws only when view options
+  change; a transparent overlay holds the inspection highlight.
+
+### Motion and render budget (viewer step)
+
+- **Reduced motion.** `state/useReducedMotion()` resolves the saved setting
+  with the OS `prefers-reduced-motion` query, live. The renderer never reads
+  settings: features pass explicit `animation`, `autoRotate` and `paused` props.
+  Homepage characters stand still (no auto-rotate, `none` pose) under reduced
+  motion and have a pause button otherwise. The Studio defaults its animation
+  to Off under reduced motion (`effectiveAnimation`); choosing Idle or Walk is
+  a deliberate action and is honored.
+- **Frame loop.** `viewerFrameLoop` picks R3F's loop: `never` while a view is
+  offscreen or hidden (`ui/useVisibility`, IntersectionObserver; a
+  `display: none` mobile tab counts as hidden), `always` only while something
+  moves, `demand` otherwise (prop changes, camera presets and orbit
+  interaction invalidate).
+- **No-WebGL fallback.** The Studio fallback is a `FlatPreview` filtered by
+  the same layer and body-part state as the 3D view (`composeFlatView`
+  filter); camera and animation controls are hidden while it is shown.
+- **Bounded exception to §6's single shared context:** the homepage has two
+  independent `<Canvas>` contexts (hero + sample viewer). Accepted because
+  there are exactly two, each mounts only near the viewport and draws nothing
+  while offscreen. Galleries, compare views or any page with more than two
+  live views must use the shared-context `<View>` design in §6.
 
 ## 5. 2D editor (`editor2d/`)
 

@@ -1,4 +1,4 @@
-import { test as base, expect, type Page } from '@playwright/test';
+import { test as base, expect, type Locator, type Page } from '@playwright/test';
 
 /**
  * Every test fails on any console error or uncaught page exception
@@ -264,5 +264,235 @@ test.describe('studio', () => {
     await page.getByRole('button', { name: 'Back', exact: true }).click();
     await page.getByRole('radio', { name: 'Walk' }).click();
     await expect(page.getByRole('radio', { name: 'Walk' })).toHaveAttribute('aria-checked', 'true');
+  });
+});
+
+/**
+ * Counts WebGL draw calls per canvas (in a `data-draws` attribute) so tests
+ * can assert that a particular view is, or is not, rendering.
+ */
+async function instrumentDraws(page: Page) {
+  await page.addInitScript(() => {
+    const proto = WebGL2RenderingContext.prototype;
+    const count = (gl: WebGL2RenderingContext) => {
+      const canvas = gl.canvas;
+      if (canvas instanceof HTMLCanvasElement) {
+        canvas.dataset['draws'] = String(Number(canvas.dataset['draws'] ?? '0') + 1);
+      }
+    };
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- re-bound with apply
+    const drawElements = proto.drawElements;
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- re-bound with apply
+    const drawArrays = proto.drawArrays;
+    proto.drawElements = function (this: WebGL2RenderingContext, ...args) {
+      count(this);
+      drawElements.apply(this, args);
+    };
+    proto.drawArrays = function (this: WebGL2RenderingContext, ...args) {
+      count(this);
+      drawArrays.apply(this, args);
+    };
+  });
+}
+
+/** Draw calls the view's canvas issues during `ms`, after pending frames settle. */
+async function drawsDuring(view: Locator, ms = 600) {
+  const canvas = view.locator('canvas');
+  const read = async () => Number((await canvas.getAttribute('data-draws')) ?? '0');
+  await view.page().waitForTimeout(400);
+  const before = await read();
+  await view.page().waitForTimeout(ms);
+  return (await read()) - before;
+}
+
+const HERO = /Interactive 3D preview of the Explorer/;
+
+test.describe('3D motion and render budget', () => {
+  test.beforeEach(async ({ page }) => {
+    await instrumentDraws(page);
+  });
+
+  test('the hero animates with full motion and its pause button stops it', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.goto('/');
+    const hero = page.getByRole('img', { name: HERO });
+    await expect(hero.locator('canvas')).toBeVisible();
+    await expect(hero).toHaveAttribute('data-frameloop', 'always');
+    expect(await drawsDuring(hero)).toBeGreaterThan(0);
+
+    await page.getByRole('button', { name: 'Pause animation' }).first().click();
+    await expect(hero).toHaveAttribute('data-frameloop', 'demand');
+    // Orbit damping eases the rotation out over ~1.5 s, then drawing stops.
+    await expect.poll(() => drawsDuring(hero), { timeout: 8000 }).toBe(0);
+    await expect(page.getByRole('button', { name: 'Play animation' }).first()).toBeVisible();
+  });
+
+  test('OS reduced motion stops the hero character', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/');
+    const hero = page.getByRole('img', { name: HERO });
+    await expect(hero.locator('canvas')).toBeVisible();
+    await expect(hero).toHaveAttribute('data-frameloop', 'demand');
+    expect(await drawsDuring(hero)).toBe(0);
+    // Nothing moves, so there is nothing to pause.
+    await expect(page.getByRole('button', { name: 'Pause animation' })).toHaveCount(0);
+
+    // A live OS change resumes motion on the mounted view.
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await expect(hero).toHaveAttribute('data-frameloop', 'always');
+  });
+
+  test('the Reduced setting stops 3D motion even when the OS allows it', async ({
+    page,
+    isMobile,
+  }) => {
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.goto('/settings');
+    await page.getByRole('radio', { name: 'Reduced' }).click();
+    await page.goto('/');
+    const hero = page.getByRole('img', { name: HERO });
+    await expect(hero.locator('canvas')).toBeVisible();
+    await expect(hero).toHaveAttribute('data-frameloop', 'demand');
+    expect(await drawsDuring(hero)).toBe(0);
+
+    await page.goto('/editor');
+    if (isMobile) await page.getByRole('radio', { name: '3D preview' }).click();
+    await expect(page.getByRole('radio', { name: 'Off' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  test('offscreen homepage viewers stop drawing and resume on return', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.goto('/');
+    await page.locator('#characters').scrollIntoViewIfNeeded();
+    const sample = page.getByRole('img', { name: /3D preview of Knight/ });
+    await expect(sample.locator('canvas')).toBeVisible();
+
+    await page.evaluate(() => {
+      window.scrollTo(0, document.documentElement.scrollHeight);
+    });
+    const hero = page.getByRole('img', { name: HERO });
+    await expect(sample).toHaveAttribute('data-frameloop', 'never');
+    await expect(hero).toHaveAttribute('data-frameloop', 'never');
+    expect(await drawsDuring(sample)).toBe(0);
+    expect(await drawsDuring(hero)).toBe(0);
+
+    await page.evaluate(() => {
+      window.scrollTo(0, 0);
+    });
+    await expect(page.getByRole('img', { name: HERO })).toHaveAttribute('data-frameloop', 'always');
+    expect(await drawsDuring(hero)).toBeGreaterThan(0);
+  });
+
+  test('a hidden Studio preview tab stops drawing', async ({ page, isMobile }) => {
+    test.skip(!isMobile, 'Panels are tabs only on narrow screens.');
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.goto('/editor');
+    await page.getByRole('radio', { name: '3D preview' }).click();
+    const preview = page.getByRole('img', { name: '3D preview of Explorer' });
+    await expect(preview.locator('canvas')).toBeVisible();
+    expect(await drawsDuring(preview)).toBeGreaterThan(0);
+
+    await page.getByRole('radio', { name: '2D texture' }).click();
+    const hidden = page.getByRole('img', { name: '3D preview of Explorer', includeHidden: true });
+    await expect(hidden).toHaveAttribute('data-frameloop', 'never');
+    expect(await drawsDuring(hidden)).toBe(0);
+  });
+});
+
+test.describe('studio without WebGL', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      // eslint-disable-next-line @typescript-eslint/unbound-method -- re-bound with apply/call
+      const getContext = HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = function (
+        this: HTMLCanvasElement,
+        type: string,
+        ...rest: unknown[]
+      ) {
+        if (type.includes('webgl')) return null;
+        return (getContext as (...a: unknown[]) => unknown).call(this, type, ...rest);
+      } as typeof getContext;
+    });
+  });
+
+  test('the flat fallback follows layer and body-part settings', async ({ page, isMobile }) => {
+    await page.goto('/editor?sample=knight');
+    const flat = page.getByRole('img', { name: 'Flat front view of Knight', includeHidden: true });
+    await expect(flat).toBeAttached();
+    const alpha = () =>
+      flat.evaluate((canvas: HTMLCanvasElement) => {
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return -1;
+        const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        let sum = 0;
+        for (let i = 3; i < data.length; i += 4) sum += data[i] ?? 0;
+        return sum;
+      });
+    const full = await alpha();
+    expect(full).toBeGreaterThan(0);
+
+    // Camera and animation do not apply to a flat view.
+    await expect(page.getByRole('button', { name: 'Back', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('radio', { name: 'Walk' })).toHaveCount(0);
+
+    if (isMobile) await page.getByRole('radio', { name: 'View', exact: true }).click();
+    await page.getByRole('button', { name: 'Head', exact: true }).click();
+    await expect.poll(alpha).toBeLessThan(full);
+    await page.getByRole('button', { name: 'Full skin' }).click();
+    await page.getByRole('switch', { name: 'Outer layer' }).click();
+    await page.getByRole('switch', { name: 'Inner layer' }).click();
+    await expect.poll(alpha).toBe(0);
+  });
+});
+
+test.describe('studio interactions', () => {
+  test('Ctrl + wheel zooms the texture and is cancelled; plain wheel is not', async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(isMobile, 'Wheel gestures are desktop input.');
+    await page.goto('/editor');
+    const texture = page.getByRole('img', { name: /64×64 skin texture/ });
+    await expect(texture).toBeVisible();
+    await page.evaluate(() => {
+      const state = globalThis as unknown as { __prevented: boolean[] };
+      state.__prevented = [];
+      window.addEventListener('wheel', (e) => state.__prevented.push(e.defaultPrevented));
+    });
+    const zoom = page.locator('output').first();
+    const before = await zoom.textContent();
+
+    await texture.hover();
+    await page.keyboard.down('Control');
+    await page.mouse.wheel(0, -100);
+    await page.keyboard.up('Control');
+    await expect(zoom).not.toHaveText(before ?? '');
+
+    const afterZoom = await zoom.textContent();
+    await page.mouse.wheel(0, 100);
+    await expect
+      .poll(() =>
+        page.evaluate(() => (globalThis as unknown as { __prevented: boolean[] }).__prevented),
+      )
+      .toEqual([true, false]);
+    await expect(zoom).toHaveText(afterZoom ?? '');
+  });
+
+  test('a refused full-screen request shows a message, not an error', async ({
+    page,
+    isMobile,
+  }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(Document.prototype, 'fullscreenEnabled', { get: () => true });
+      Element.prototype.requestFullscreen = () =>
+        Promise.reject(new DOMException('Denied by test', 'NotAllowedError'));
+    });
+    await page.goto('/editor');
+    if (isMobile) await page.getByRole('radio', { name: '3D preview' }).click();
+    await page.getByRole('button', { name: 'Full screen' }).click();
+    await expect(
+      page.getByText("Full screen isn't available right now.", { exact: false }),
+    ).toBeVisible();
+    await expect(page.getByRole('img', { name: '3D preview of Explorer' })).toBeVisible();
   });
 });

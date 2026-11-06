@@ -1,9 +1,11 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { Profiler } from 'react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@/i18n';
 import { StudioPage } from './StudioPage';
-import { useStudio } from './studio-store';
+import { effectiveAnimation, useStudio } from './studio-store';
+import { ViewPanel } from './ViewPanel';
 
 function renderStudio(url = '/editor') {
   const router = createMemoryRouter([{ path: '/editor', Component: StudioPage }], {
@@ -42,9 +44,62 @@ describe('studio store', () => {
     useStudio.getState().setAnimation('walk');
     expect(useStudio.getState()).toMatchObject({ animation: 'walk', paused: false });
   });
+
+  it('pointer moves within one texel do not notify subscribers', () => {
+    const listener = vi.fn();
+    const unsubscribe = useStudio.subscribe(listener);
+    useStudio.getState().setInspected({ x: 3, y: 4 });
+    useStudio.getState().setInspected({ x: 3, y: 4 });
+    useStudio.getState().setInspected({ x: 3, y: 4 });
+    expect(listener).toHaveBeenCalledTimes(1);
+    useStudio.getState().setInspected({ x: 4, y: 4 });
+    expect(listener).toHaveBeenCalledTimes(2);
+    expect(useStudio.getState().inspected).toEqual({ x: 4, y: 4 });
+    useStudio.getState().setInspected(null);
+    useStudio.getState().setInspected(null);
+    expect(listener).toHaveBeenCalledTimes(3);
+    unsubscribe();
+  });
+
+  it('defaults the animation to off under reduced motion; an explicit choice wins', () => {
+    expect(useStudio.getState().animation).toBeNull();
+    expect(effectiveAnimation(null, false)).toBe('idle');
+    expect(effectiveAnimation(null, true)).toBe('none');
+    expect(effectiveAnimation('walk', true)).toBe('walk');
+  });
 });
 
 describe('StudioPage', () => {
+  it('pixel inspection does not re-render the view panel', () => {
+    let renders = 0;
+    render(
+      <I18nProvider language="en">
+        <Profiler
+          id="view"
+          onRender={() => {
+            renders++;
+          }}
+        >
+          <ViewPanel />
+        </Profiler>
+      </I18nProvider>,
+    );
+    const before = renders;
+    act(() => {
+      useStudio.getState().setInspected({ x: 1, y: 1 });
+      useStudio.getState().setInspected({ x: 2, y: 2 });
+      useStudio.getState().setZoom(12);
+    });
+    expect(renders).toBe(before);
+  });
+
+  it('without WebGL, the flat fallback replaces the camera and animation controls', async () => {
+    renderStudio('/editor?sample=knight');
+    expect(await screen.findByRole('img', { name: 'Flat front view of Knight' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
+    expect(screen.queryByRole('radiogroup', { name: 'Animation' })).toBeNull();
+  });
+
   it('shows the honest viewer notice and no editing controls', () => {
     renderStudio();
     expect(screen.getByText(/Editing isn't available yet/)).toBeTruthy();

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router';
 import { SAMPLE_CHARACTERS, sampleSkin, type SampleId } from '@/content';
 import { FlatPreview } from '@/editor2d';
@@ -6,13 +6,10 @@ import { useT } from '@/i18n';
 import { Badge, buttonClasses, cn, Icon } from '@/ui';
 import { PlayerStage } from './PlayerStage';
 import { Section } from './Section';
-import { useInView } from './use-in-view';
 
 export function CharactersSection() {
   const t = useT();
   const [selected, setSelected] = useState<SampleId>('knight');
-  const stageRef = useRef<HTMLDivElement>(null);
-  const inView = useInView(stageRef);
   const name = t(`samples.${selected}.name`);
 
   return (
@@ -65,10 +62,7 @@ export function CharactersSection() {
           })}
         </div>
 
-        <div
-          ref={stageRef}
-          className="relative flex min-h-[420px] flex-col overflow-hidden rounded-panel border border-line bg-surface shadow-panel lg:min-h-[520px]"
-        >
+        <div className="relative flex min-h-[420px] flex-col overflow-hidden rounded-panel border border-line bg-surface shadow-panel lg:min-h-[520px]">
           <div
             aria-hidden="true"
             className="pointer-events-none absolute inset-0"
@@ -80,7 +74,6 @@ export function CharactersSection() {
           <PlayerStage
             key={selected}
             sampleId={selected}
-            active={inView}
             label={t('home.characters.viewerLabel', { name })}
             fallbackHeight={280}
             className="flex-1"

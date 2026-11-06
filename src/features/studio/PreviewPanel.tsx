@@ -1,14 +1,25 @@
-import { Suspense, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { sampleSkin } from '@/content';
 import { FlatPreview } from '@/editor2d';
 import { BODY_PARTS, type BodyPart } from '@/engine';
 import { useT } from '@/i18n';
-import { CAMERA_VIEWS, LazyPlayerViewer, type CameraView } from '@/renderer3d';
+import { CAMERA_VIEWS, isWebGLAvailable, LazyPlayerViewer, type CameraView } from '@/renderer3d';
 import { ANIMATIONS, type AnimationId } from '@/rig';
-import { Button, IconButton, PixelLoader, SegmentedControl } from '@/ui';
-import { useStudio } from './studio-store';
+import { useReducedMotion } from '@/state';
+import { Button, IconButton, PixelLoader, SegmentedControl, toast, useVisibility } from '@/ui';
+import { effectiveAnimation, useStudio } from './studio-store';
 
-function useFullscreen(ref: RefObject<HTMLElement | null>) {
+function useFullscreen(ref: RefObject<HTMLElement | null>, onError: () => void) {
   const [active, setActive] = useState(false);
   useEffect(() => {
     const onChange = () => {
@@ -20,23 +31,59 @@ function useFullscreen(ref: RefObject<HTMLElement | null>) {
     };
   }, [ref]);
   const supported = typeof document !== 'undefined' && document.fullscreenEnabled;
+  // `fullscreenchange` stays the authority for `active`; a refused request
+  // (permissions, policy, no user gesture) only produces a message.
   const toggle = () => {
-    if (document.fullscreenElement) void document.exitFullscreen();
-    else void ref.current?.requestFullscreen();
+    const request = document.fullscreenElement
+      ? document.exitFullscreen()
+      : ref.current?.requestFullscreen();
+    request?.catch(onError);
   };
   return { active, supported, toggle };
+}
+
+/** Mounted only while the static fallback is shown; reports it to the panel. */
+function StaticFallback({ onShow, children }: { onShow: () => void; children: ReactNode }) {
+  useEffect(onShow, [onShow]);
+  return <>{children}</>;
 }
 
 /** Right panel: live 3D preview with camera and animation controls. */
 export function PreviewPanel() {
   const t = useT();
-  const s = useStudio();
+  const s = useStudio(
+    useShallow((st) => ({
+      sampleId: st.sampleId,
+      model: st.model,
+      showInner: st.showInner,
+      showOuter: st.showOuter,
+      focus: st.focus,
+      animation: st.animation,
+      paused: st.paused,
+      view: st.view,
+      viewRequest: st.viewRequest,
+      setAnimation: st.setAnimation,
+      togglePaused: st.togglePaused,
+      showView: st.showView,
+    })),
+  );
   const panelRef = useRef<HTMLDivElement>(null);
-  const fullscreen = useFullscreen(panelRef);
+  const stageRef = useRef<HTMLDivElement>(null);
+  // Draw only while the preview is on screen (not on a hidden mobile tab).
+  const { visible } = useVisibility(stageRef);
+  const reducedMotion = useReducedMotion();
+  const animation = effectiveAnimation(s.animation, reducedMotion);
+  const fullscreen = useFullscreen(panelRef, () => {
+    toast.warning(t('studio.fullscreenFailed'));
+  });
+  const [staticView, setStaticView] = useState(() => !isWebGLAvailable());
+  const showStatic = useCallback(() => {
+    setStaticView(true);
+  }, []);
   const skin = sampleSkin(s.sampleId);
   const name = t(`samples.${s.sampleId}.name`);
 
-  // Focusing one body part isolates it in 3D as well.
+  // Focusing one body part isolates it in 3D (and in the flat fallback).
   const visibleParts = useMemo<ReadonlySet<BodyPart>>(
     () => new Set(s.focus === 'all' ? BODY_PARTS : [s.focus]),
     [s.focus],
@@ -48,15 +95,22 @@ export function PreviewPanel() {
   }));
 
   const fallback = (
-    <div className="flex size-full flex-col items-center justify-center gap-4 p-4 text-center">
-      <FlatPreview
-        skin={skin}
-        model={s.model}
-        height={220}
-        label={t('studio.previewLabel', { name })}
-      />
-      <p className="max-w-xs text-xs text-muted">{t('webgl.unavailable')}</p>
-    </div>
+    <StaticFallback onShow={showStatic}>
+      <div className="flex size-full flex-col items-center justify-center gap-4 p-4 text-center">
+        <FlatPreview
+          skin={skin}
+          model={s.model}
+          height={220}
+          showInner={s.showInner}
+          showOuter={s.showOuter}
+          visibleParts={visibleParts}
+          label={t('studio.flatPreviewLabel', { name })}
+        />
+        <p className="max-w-xs text-xs text-muted">
+          {t('webgl.unavailable')} {t('studio.flatPreviewNote')}
+        </p>
+      </div>
+    </StaticFallback>
   );
 
   return (
@@ -74,7 +128,7 @@ export function PreviewPanel() {
         )}
       </div>
 
-      <div className="relative min-h-[340px] flex-1 lg:min-h-56">
+      <div ref={stageRef} className="relative min-h-[340px] flex-1 lg:min-h-56">
         <div
           aria-hidden="true"
           className="pointer-events-none absolute inset-0"
@@ -97,8 +151,9 @@ export function PreviewPanel() {
             showInner={s.showInner}
             showOuter={s.showOuter}
             visibleParts={visibleParts}
-            animation={s.animation}
+            animation={animation}
             paused={s.paused}
+            active={visible}
             view={s.view}
             viewRequest={s.viewRequest}
             label={t('studio.previewLabel', { name })}
@@ -107,45 +162,48 @@ export function PreviewPanel() {
         </Suspense>
       </div>
 
-      <div className="flex flex-col gap-4 border-t border-line p-4">
-        <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-semibold tracking-wider text-subtle uppercase">
-            {t('studio.camera')}
-          </span>
-          <div className="flex flex-wrap gap-1.5">
-            {CAMERA_VIEWS.map((view: CameraView) => (
-              <Button
-                key={view}
-                size="sm"
-                variant={view === 'reset' ? 'ghost' : 'secondary'}
-                onClick={() => {
-                  s.showView(view);
-                }}
-              >
-                {t(`studio.views.${view}`)}
-              </Button>
-            ))}
+      {/* Camera and animation only apply to the 3D view, not the flat fallback. */}
+      {!staticView && (
+        <div className="flex flex-col gap-4 border-t border-line p-4">
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold tracking-wider text-subtle uppercase">
+              {t('studio.camera')}
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {CAMERA_VIEWS.map((view: CameraView) => (
+                <Button
+                  key={view}
+                  size="sm"
+                  variant={view === 'reset' ? 'ghost' : 'secondary'}
+                  onClick={() => {
+                    s.showView(view);
+                  }}
+                >
+                  {t(`studio.views.${view}`)}
+                </Button>
+              ))}
+            </div>
           </div>
-        </div>
-        <div className="flex items-end gap-2">
-          <div className="min-w-0 flex-1">
-            <SegmentedControl
-              label={t('studio.animation')}
-              value={s.animation}
-              options={animationOptions}
-              onChange={s.setAnimation}
+          <div className="flex items-end gap-2">
+            <div className="min-w-0 flex-1">
+              <SegmentedControl
+                label={t('studio.animation')}
+                value={animation}
+                options={animationOptions}
+                onChange={s.setAnimation}
+              />
+            </div>
+            <IconButton
+              icon={s.paused ? 'play' : 'pause'}
+              label={s.paused ? t('studio.play') : t('studio.pause')}
+              tooltipSide="top"
+              tooltipAlign="end"
+              disabled={animation === 'none'}
+              onClick={s.togglePaused}
             />
           </div>
-          <IconButton
-            icon={s.paused ? 'play' : 'pause'}
-            label={s.paused ? t('studio.play') : t('studio.pause')}
-            tooltipSide="top"
-            tooltipAlign="end"
-            disabled={s.animation === 'none'}
-            onClick={s.togglePaused}
-          />
         </div>
-      </div>
+      )}
     </div>
   );
 }

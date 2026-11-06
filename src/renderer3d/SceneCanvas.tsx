@@ -1,5 +1,6 @@
 import { Canvas } from '@react-three/fiber';
 import type { ReactNode } from 'react';
+import type { FrameLoop } from './frame-loop';
 import { RenderErrorBoundary } from './RenderErrorBoundary';
 import { isWebGLAvailable } from './webgl';
 
@@ -13,11 +14,16 @@ export interface SceneCanvasProps {
    * to start (caller supplies translated text).
    */
   readonly fallback: ReactNode;
-  /** `demand` renders only on invalidation — use for static previews to save battery. */
-  readonly frameloop?: 'always' | 'demand';
+  /** See `FrameLoop`; use `demand` for static content and `never` while hidden. */
+  readonly frameloop?: FrameLoop;
   readonly className?: string | undefined;
   /** Accessible description of what the 3D view shows. */
   readonly label: string;
+  /**
+   * Controls layered over the canvas (e.g. a pause button). Rendered only while
+   * the 3D view itself is shown, never with the fallback.
+   */
+  readonly overlay?: ReactNode;
 }
 
 /**
@@ -34,22 +40,26 @@ export default function SceneCanvas({
   frameloop = 'always',
   className,
   label,
+  overlay,
 }: SceneCanvasProps) {
   if (!isWebGLAvailable()) return <>{fallback}</>;
   return (
     <RenderErrorBoundary fallback={fallback}>
-      <div className={className} role="img" aria-label={label}>
-        <Canvas
-          frameloop={frameloop}
-          dpr={[1, 2]}
-          gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
-          camera={{ position: [0, MODEL_CENTER_Y, 60], fov: 35, near: 0.1, far: 1000 }}
-          onCreated={({ camera }) => {
-            camera.lookAt(0, MODEL_CENTER_Y, 0);
-          }}
-        >
-          {children}
-        </Canvas>
+      <div className={className}>
+        <div role="img" aria-label={label} className="size-full" data-frameloop={frameloop}>
+          <Canvas
+            frameloop={frameloop}
+            dpr={[1, 2]}
+            gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
+            camera={{ position: [0, MODEL_CENTER_Y, 60], fov: 35, near: 0.1, far: 1000 }}
+            onCreated={({ camera }) => {
+              camera.lookAt(0, MODEL_CENTER_Y, 0);
+            }}
+          >
+            {children}
+          </Canvas>
+        </div>
+        {overlay}
       </div>
     </RenderErrorBoundary>
   );

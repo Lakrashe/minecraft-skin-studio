@@ -4,7 +4,7 @@
  */
 export { FlatPreview, type FlatPreviewProps } from './FlatPreview';
 export { TextureView, type TextureViewProps } from './TextureView';
-export { composeFlatView, type FlatSide } from './flat-view';
+export { composeFlatView, type FlatSide, type FlatViewFilter } from './flat-view';
 export {
   MAX_ZOOM,
   MIN_ZOOM,

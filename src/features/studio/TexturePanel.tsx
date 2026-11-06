@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type WheelEvent } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { sampleSkin } from '@/content';
 import { clampZoom, fitZoom, MAX_ZOOM, MIN_ZOOM, TextureView } from '@/editor2d';
 import { useT } from '@/i18n';
@@ -24,10 +24,13 @@ export function TexturePanel() {
   }, [storeSetZoom]);
 
   /** A manual zoom stops auto-fitting until "Fit to view" is pressed. */
-  const setZoom = (zoom: number) => {
-    autoFit.current = false;
-    storeSetZoom(clampZoom(zoom));
-  };
+  const setZoom = useCallback(
+    (zoom: number) => {
+      autoFit.current = false;
+      storeSetZoom(clampZoom(zoom));
+    },
+    [storeSetZoom],
+  );
   const fit = () => {
     autoFit.current = true;
     fitNow();
@@ -45,11 +48,23 @@ export function TexturePanel() {
     };
   }, [fitNow]);
 
-  const onWheel = (event: WheelEvent) => {
-    if (!event.ctrlKey && !event.metaKey) return;
-    event.preventDefault();
-    setZoom(s.zoom + (event.deltaY < 0 ? 1 : -1));
-  };
+  // Ctrl/⌘ + wheel zooms the texture instead of the page. React's wheel
+  // listener is passive and cannot cancel the browser's zoom, so a native
+  // non-passive listener is used; plain wheel scrolling is left alone.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      event.preventDefault();
+      if (event.deltaY === 0) return;
+      setZoom(useStudio.getState().zoom + (event.deltaY < 0 ? 1 : -1));
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => {
+      el.removeEventListener('wheel', onWheel);
+    };
+  }, [setZoom]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -86,11 +101,7 @@ export function TexturePanel() {
           />
         </div>
       </div>
-      <div
-        ref={scrollRef}
-        onWheel={onWheel}
-        className="flex min-h-[320px] flex-1 overflow-auto bg-bg-raised p-4"
-      >
+      <div ref={scrollRef} className="flex min-h-[320px] flex-1 overflow-auto bg-bg-raised p-4">
         {/* m-auto centers when smaller than the viewport, scrolls when larger. */}
         <div className="m-auto">
           <TextureView

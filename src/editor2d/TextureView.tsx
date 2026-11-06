@@ -32,6 +32,23 @@ const CHECKER_B = '#363c44';
 const DIM = 'rgba(8, 10, 12, 0.6)';
 
 /**
+ * Sizes the backing store for `size` CSS pixels at the device pixel ratio
+ * (capped at 2). Resizing clears a canvas, so it happens only when the size
+ * actually changes.
+ */
+function prepareCanvas(canvas: HTMLCanvasElement, size: number): CanvasRenderingContext2D | null {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const backing = Math.round(size * dpr);
+  if (canvas.width !== backing) canvas.width = backing;
+  if (canvas.height !== backing) canvas.height = backing;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  return ctx;
+}
+
+/**
  * Read-only, pixel-exact view of the 64×64 skin texture: transparency
  * checkerboard, optional pixel grid, face outlines from the engine region
  * tables, focus dimming and texel inspection (pointer or arrow keys).
@@ -52,6 +69,7 @@ export function TextureView({
   label,
 }: TextureViewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const overlayRef = useRef<HTMLCanvasElement>(null);
   const textureRef = useRef<HTMLCanvasElement | null>(null);
   const size = SKIN_WIDTH * zoom;
 
@@ -67,15 +85,12 @@ export function TextureView({
     return mask;
   }, [model, focus]);
 
+  // Base layer: redrawn only when the texture or view options change, never
+  // on pixel inspection.
   useEffect(() => {
     const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d');
-    if (!canvas || !ctx) return;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = size * dpr;
-    canvas.height = size * dpr;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.imageSmoothingEnabled = false;
+    const ctx = canvas ? prepareCanvas(canvas, size) : null;
+    if (!ctx) return;
 
     // Transparency checkerboard, one check per texel.
     ctx.fillStyle = CHECKER_A;
@@ -125,20 +140,26 @@ export function TextureView({
         );
       }
     }
+  }, [pixels, dimmed, size, zoom, grid, outlines, focus, model, accent]);
 
-    if (inspected) {
-      const region = regionAt(inspected.x, inspected.y, model);
+  // Overlay: only the inspection highlight, cheap to redraw.
+  useEffect(() => {
+    const canvas = overlayRef.current;
+    const ctx = canvas ? prepareCanvas(canvas, size) : null;
+    if (!ctx) return;
+    ctx.clearRect(0, 0, size, size);
+    if (!inspected) return;
+    const region = regionAt(inspected.x, inspected.y, model);
+    if (region) {
       ctx.strokeStyle = accent;
-      if (region) {
-        ctx.lineWidth = 2;
-        const r = region.rect;
-        ctx.strokeRect(r.x * zoom + 1, r.y * zoom + 1, r.w * zoom - 2, r.h * zoom - 2);
-      }
       ctx.lineWidth = 2;
-      ctx.strokeStyle = '#ffffff';
-      ctx.strokeRect(inspected.x * zoom + 1, inspected.y * zoom + 1, zoom - 2, zoom - 2);
+      const r = region.rect;
+      ctx.strokeRect(r.x * zoom + 1, r.y * zoom + 1, r.w * zoom - 2, r.h * zoom - 2);
     }
-  }, [pixels, dimmed, size, zoom, grid, outlines, focus, model, accent, inspected]);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#ffffff';
+    ctx.strokeRect(inspected.x * zoom + 1, inspected.y * zoom + 1, zoom - 2, zoom - 2);
+  }, [inspected, size, zoom, model, accent]);
 
   const onPointer = (event: PointerEvent<HTMLCanvasElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -163,19 +184,27 @@ export function TextureView({
   };
 
   return (
-    <canvas
-      ref={canvasRef}
-      tabIndex={0}
-      role="img"
-      aria-label={label}
-      onPointerMove={onPointer}
-      onPointerDown={onPointer}
-      onPointerLeave={() => {
-        onInspect(null);
-      }}
-      onKeyDown={onKeyDown}
-      className="block shrink-0 cursor-crosshair rounded-sm outline-offset-4"
-      style={{ width: size, height: size, imageRendering: 'pixelated' }}
-    />
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <canvas
+        ref={canvasRef}
+        tabIndex={0}
+        role="img"
+        aria-label={label}
+        onPointerMove={onPointer}
+        onPointerDown={onPointer}
+        onPointerLeave={() => {
+          onInspect(null);
+        }}
+        onKeyDown={onKeyDown}
+        className="block cursor-crosshair rounded-sm outline-offset-4"
+        style={{ width: size, height: size, imageRendering: 'pixelated' }}
+      />
+      <canvas
+        ref={overlayRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0"
+        style={{ width: size, height: size }}
+      />
+    </div>
   );
 }

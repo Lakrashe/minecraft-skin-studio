@@ -32,6 +32,8 @@ export const it: Dictionary = {
     heroViewerLabel:
       'Anteprima 3D interattiva del personaggio di esempio {name}. Trascina per ruotare.',
     dragHint: 'Trascina per ruotare',
+    pauseMotion: 'Metti in pausa l’animazione',
+    playMotion: 'Avvia l’animazione',
     features: {
       title: 'Tutto per il tuo look Minecraft',
       intro: 'Lo studio viene costruito per fasi. Ecco cosa fa ogni parte e a che punto è oggi.',
@@ -78,7 +80,8 @@ export const it: Dictionary = {
     },
     accuracy: {
       title: 'Fedele a Minecraft',
-      intro: 'Quello che vedi nello studio è esattamente ciò che mostrerà Minecraft.',
+      intro:
+        'Lo studio usa le stesse regioni di texture di Minecraft, verificate da test automatici.',
       format: {
         title: 'Formato skin 64×64',
         body: 'La texture standard usata dalle skin personalizzate di Java Edition e Bedrock Edition.',
@@ -188,6 +191,11 @@ export const it: Dictionary = {
     play: 'Avvia l’animazione',
     fullscreen: 'Schermo intero',
     exitFullscreen: 'Esci da schermo intero',
+    fullscreenFailed:
+      'Lo schermo intero non è disponibile ora. L’anteprima continua a funzionare qui.',
+    flatPreviewLabel: 'Vista frontale piatta di {name}',
+    flatPreviewNote:
+      'Viene mostrata una vista frontale piatta che segue le impostazioni di livelli e parti del corpo.',
     status: {
       none: 'Passa sulla texture o usa le frecce per esaminare un pixel',
       pixel: 'Pixel {x}, {y}',

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { getSample } from '@/content';
 import { BODY_PARTS, type BodyPart, type SkinModel } from '@/engine';
 import { useT } from '@/i18n';
@@ -19,7 +20,24 @@ function PanelGroup({ title, children }: { title: string; children: ReactNode })
 /** Left panel: view controls that work today (body-part focus, layers, canvas, model). */
 export function ViewPanel() {
   const t = useT();
-  const s = useStudio();
+  // Narrow subscription: pixel inspection and zoom must not re-render this panel.
+  const s = useStudio(
+    useShallow((st) => ({
+      sampleId: st.sampleId,
+      model: st.model,
+      focus: st.focus,
+      showInner: st.showInner,
+      showOuter: st.showOuter,
+      grid: st.grid,
+      outlines: st.outlines,
+      setFocus: st.setFocus,
+      setShowInner: st.setShowInner,
+      setShowOuter: st.setShowOuter,
+      setGrid: st.setGrid,
+      setOutlines: st.setOutlines,
+      setModel: st.setModel,
+    })),
+  );
   const designedFor = getSample(s.sampleId).model;
   const parts: readonly (BodyPart | 'all')[] = ['all', ...BODY_PARTS];
   const modelOptions: { value: SkinModel; label: string }[] = [

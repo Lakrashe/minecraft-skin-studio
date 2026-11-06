@@ -66,12 +66,27 @@ function copyFace(
   }
 }
 
+/** Which layers and body parts a flat view includes (all by default). */
+export interface FlatViewFilter {
+  readonly showInner?: boolean;
+  readonly showOuter?: boolean;
+  /** Parts to draw; all when omitted. */
+  readonly visibleParts?: ReadonlySet<BodyPart>;
+}
+
 /**
  * 16×32 view of the character as seen from the front or back, inner layer
  * with the outer layer composited on top. From the front, the player's right
- * arm and leg appear on the viewer's left.
+ * arm and leg appear on the viewer's left. `filter` hides layers and parts the
+ * same way the 3D view does.
  */
-export function composeFlatView(skin: PixelBuffer, model: SkinModel, side: FlatSide): PixelBuffer {
+export function composeFlatView(
+  skin: PixelBuffer,
+  model: SkinModel,
+  side: FlatSide,
+  filter: FlatViewFilter = {},
+): PixelBuffer {
+  const { showInner = true, showOuter = true, visibleParts } = filter;
   const out = createPixelBuffer(FLAT_VIEW_WIDTH, FLAT_VIEW_HEIGHT);
   const armW = model === 'slim' ? 3 : 4;
   const [viewerLeftArm, viewerRightArm, viewerLeftLeg, viewerRightLeg] =
@@ -87,8 +102,14 @@ export function composeFlatView(skin: PixelBuffer, model: SkinModel, side: FlatS
     [viewerLeftLeg, 4, 20],
     [viewerRightLeg, 8, 20],
   ];
-  for (const layer of ['inner', 'outer'] as const) {
-    for (const [part, x, y] of placements) copyFace(out, skin, part, layer, side, model, x, y);
+  const layers: SkinLayer[] = [];
+  if (showInner) layers.push('inner');
+  if (showOuter) layers.push('outer');
+  for (const layer of layers) {
+    for (const [part, x, y] of placements) {
+      if (visibleParts && !visibleParts.has(part)) continue;
+      copyFace(out, skin, part, layer, side, model, x, y);
+    }
   }
   return out;
 }

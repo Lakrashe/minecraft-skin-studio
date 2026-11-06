@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { createPixelBuffer, faceRect, getPixel, setPixel, type SkinModel } from '@/engine';
+import {
+  createPixelBuffer,
+  faceRect,
+  fillRect,
+  getPixel,
+  setPixel,
+  type PixelBuffer,
+  type SkinModel,
+} from '@/engine';
 import { composeFlatView } from './flat-view';
 import {
   clampZoom,
@@ -49,6 +57,56 @@ describe('composeFlatView', () => {
     setPixel(skin, inner.x + 1, inner.y, RED);
     expect(getPixel(composeFlatView(skin, 'classic', 'front'), 4, 0)).toEqual(BLUE);
     expect(getPixel(composeFlatView(skin, 'classic', 'front'), 5, 0)).toEqual(RED);
+  });
+
+  const alphaSum = (view: PixelBuffer) => {
+    let sum = 0;
+    for (let i = 3; i < view.data.length; i += 4) sum += view.data[i] ?? 0;
+    return sum;
+  };
+
+  /** Every texel opaque, so every face of both layers has pixels. */
+  const solid = () => {
+    const skin = createPixelBuffer();
+    fillRect(skin, { x: 0, y: 0, w: 64, h: 64 }, RED);
+    return skin;
+  };
+
+  it('hiding both layers leaves the view fully transparent', () => {
+    const view = composeFlatView(solid(), 'classic', 'front', {
+      showInner: false,
+      showOuter: false,
+    });
+    expect(alphaSum(view)).toBe(0);
+  });
+
+  it('hiding the outer layer removes the hat but keeps the face', () => {
+    const skin = createPixelBuffer();
+    const inner = faceRect('head', 'inner', 'front', 'classic');
+    const outer = faceRect('head', 'outer', 'front', 'classic');
+    setPixel(skin, inner.x, inner.y, RED);
+    setPixel(skin, outer.x, outer.y, BLUE);
+    const view = composeFlatView(skin, 'classic', 'front', { showOuter: false });
+    expect(getPixel(view, 4, 0)).toEqual(RED);
+    const outerOnly = composeFlatView(skin, 'classic', 'front', { showInner: false });
+    expect(getPixel(outerOnly, 4, 0)).toEqual(BLUE);
+  });
+
+  it('a body-part filter draws only those parts', () => {
+    const view = composeFlatView(marked('classic'), 'classic', 'front', {
+      visibleParts: new Set(['head'] as const),
+    });
+    expect(getPixel(view, 4, 0)).toEqual(RED); // head stays
+    expect(getPixel(view, 0, 8)?.a).toBe(0); // arm hidden
+    const full = composeFlatView(solid(), 'classic', 'front');
+    const headOnly = composeFlatView(solid(), 'classic', 'front', {
+      visibleParts: new Set(['head'] as const),
+    });
+    // Only the 8×8 head area (rows 0–7) has pixels.
+    for (let y = 8; y < 32; y++) {
+      for (let x = 0; x < 16; x++) expect(getPixel(headOnly, x, y)?.a).toBe(0);
+    }
+    expect(alphaSum(headOnly)).toBeLessThan(alphaSum(full));
   });
 });
 
