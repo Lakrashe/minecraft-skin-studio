@@ -1,11 +1,22 @@
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import type { BodyPart, PixelBuffer, SkinModel } from '@/engine';
 import { sampleAnimation, type AnimationId } from '@/rig';
-import { PlayerRig } from './core';
+import {
+  connectSkinSource,
+  isSkinSource,
+  PlayerRig,
+  staticSkinSource,
+  type SkinSource,
+} from './core';
 
 export interface PlayerModelProps {
-  readonly skin: PixelBuffer;
+  /**
+   * The skin: a fixed texture, or a live `SkinSource` (the editor's document).
+   * A live source updates the texture directly — pixel edits do not re-render
+   * this component or the scene.
+   */
+  readonly skin: PixelBuffer | SkinSource;
   readonly model: SkinModel;
   readonly showInner?: boolean;
   readonly showOuter?: boolean;
@@ -40,10 +51,17 @@ export function PlayerModel({
     [rig],
   );
 
-  // Layout effects run before the next frame is drawn.
-  useLayoutEffect(() => {
-    rig.setSkin(skin);
-  }, [rig, skin]);
+  const invalidate = useThree((s) => s.invalidate);
+  const source = useMemo(() => (isSkinSource(skin) ? skin : staticSkinSource(skin)), [skin]);
+  // Layout effect: the texture is filled before the next frame is drawn. Each
+  // later change copies only the changed rows and requests one frame.
+  useLayoutEffect(
+    () =>
+      connectSkinSource(rig, source, () => {
+        invalidate();
+      }),
+    [rig, source, invalidate],
+  );
   useLayoutEffect(() => {
     rig.setVisibility({ showInner, showOuter, visibleParts });
   }, [rig, showInner, showOuter, visibleParts]);

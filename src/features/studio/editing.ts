@@ -7,13 +7,13 @@ import { useEffect, useMemo } from 'react';
 import type { SampleId } from '@/content';
 import type { Texel } from '@/editor2d';
 import { blankDocument, editMask, pickColor, type SkinMask, type SkinModel } from '@/engine';
-import { sampleDocument, studioDocument, useStudioDocument } from './document';
+import { sampleDocument, studioDocument, useStudioModel } from './document';
 import { beginStroke, cancelStroke, endStroke, moveStroke } from './stroke-controller';
 import { editableLayers, isDrawingTool, useStudio } from './studio-store';
 
 /** Where tools may paint: the selected body part on the editable, visible layers. */
 export function useEditMask(): SkinMask {
-  const model = useStudioDocument().document.model;
+  const model = useStudioModel();
   const focus = useStudio((s) => s.focus);
   const editLayer = useStudio((s) => s.editLayer);
   const showInner = useStudio((s) => s.showInner);

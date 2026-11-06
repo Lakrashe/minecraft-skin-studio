@@ -617,6 +617,148 @@ Saw rgb(${seen.join(', ')})`);
       await page.mouse.click(p.x, p.y);
     }
 
+    type View = 'Front' | 'Back' | 'Left side' | 'Right side';
+
+    /**
+     * Rendered color where world point `p` (model units) appears from a camera
+     * preset. Presets sit 68 units from the player's center (0, 16, 0).
+     */
+    async function colorAtPoint(page: Page, view: View, p: readonly [number, number, number]) {
+      const [x, y, z] = p;
+      const { right, depth } = {
+        Front: { right: x, depth: 68 - z },
+        Back: { right: -x, depth: 68 + z },
+        'Left side': { right: -z, depth: 68 - x },
+        'Right side': { right: z, depth: 68 + x },
+      }[view];
+      // renderedColor scales offsets for a depth of 66; convert to this depth.
+      return renderedColor(page, (right * 66) / depth, ((y - 16) * 66) / depth);
+    }
+
+    async function expectPointColor(
+      page: Page,
+      view: View,
+      p: readonly [number, number, number],
+      expected: readonly number[],
+    ) {
+      let seen: number[] = [];
+      await expect
+        .poll(
+          async () => {
+            seen = await colorAtPoint(page, view, p);
+            return seen.every((v, i) => Math.abs(v - (expected[i] ?? 0)) <= 10);
+          },
+          { timeout: 5000, message: `${view} at (${p.join(', ')})` },
+        )
+        .toBe(true)
+        .catch((error: unknown) => {
+          throw new Error(`${String(error)}\nSaw rgb(${seen.join(', ')})`);
+        });
+    }
+
+    async function paintTexel(page: Page, hex: string, x: number, y: number) {
+      await page.getByLabel('HEX').fill(hex);
+      await page.getByLabel('HEX').press('Enter');
+      const p = await texelPoint(page, x, y);
+      await page.mouse.click(p.x, p.y);
+    }
+
+    const BLACK = [0, 0, 0]; // transparent base pixels render opaque black, as in Java
+
+    test('single painted pixels appear on the exact spot of the body, live', async ({
+      page,
+      isMobile,
+    }) => {
+      test.skip(isMobile, 'Desktop shows the 2D texture and the 3D preview side by side.');
+      await page.goto('/editor');
+      await page.getByLabel('Start from').selectOption('blank');
+      await page.getByRole('radio', { name: 'Off' }).click();
+      await page.getByLabel('Lighting').selectOption({ label: 'Flat (exact colors)' });
+      const view = async (name: View) => {
+        await page.getByRole('button', { name, exact: true }).click();
+      };
+
+      // Head front, texel (9,10): column 1, row 2 of the face.
+      await paintTexel(page, '#ff0000', 9, 10);
+      await view('Front');
+      await expectPointColor(page, 'Front', [-2.5, 29.5, 4], [255, 0, 0]);
+      await expectPointColor(page, 'Front', [-1.5, 29.5, 4], BLACK); // the next column
+      await expectPointColor(page, 'Front', [-2.5, 28.5, 4], BLACK); // the next row
+
+      // Undo and redo reach the 3D texture.
+      await page.keyboard.press('Control+z');
+      await expectPointColor(page, 'Front', [-2.5, 29.5, 4], BLACK);
+      await page.keyboard.press('Control+Shift+z');
+      await expectPointColor(page, 'Front', [-2.5, 29.5, 4], [255, 0, 0]);
+
+      // Left leg front (21,53) and the hat (outer layer) front (41,9).
+      await paintTexel(page, '#ffff00', 21, 53);
+      await expectPointColor(page, 'Front', [1.4, 10.5, 2], [255, 255, 0]);
+      await paintTexel(page, '#ff00ff', 41, 9);
+      const hat = [-2.8125, 30.8125, 4.5] as const;
+      await expectPointColor(page, 'Front', hat, [255, 0, 255]);
+
+      // Layer visibility: hiding the outer layer reveals the head underneath.
+      await page.getByRole('switch', { name: 'Outer layer' }).click();
+      await expectPointColor(page, 'Front', hat, BLACK);
+      await page.getByRole('switch', { name: 'Outer layer' }).click();
+      await expectPointColor(page, 'Front', hat, [255, 0, 255]);
+
+      // Body back (33,22): from behind, texture column 1 is on the viewer's left (+x).
+      await paintTexel(page, '#0000ff', 33, 22);
+      await view('Back');
+      await expectPointColor(page, 'Back', [2.5, 21.5, -2], [0, 0, 255]);
+
+      // Head, player's right side (1,12): from the right, column 1 is toward the back.
+      await paintTexel(page, '#00ff00', 1, 12);
+      await view('Right side');
+      await expectPointColor(page, 'Right side', [-4, 27.5, -2.5], [0, 255, 0]);
+
+      // Alex: 3-wide right arm, half a pixel lower — (45,22) is column 1, row 2.
+      await page.getByRole('radio', { name: 'Alex (slim)' }).click();
+      await paintTexel(page, '#00ffff', 45, 22);
+      await view('Front');
+      await expectPointColor(page, 'Front', [-5.5, 21, 2], [0, 255, 255]);
+    });
+
+    test('a one-pixel edit uploads a 1×1 region, not the whole texture', async ({
+      page,
+      isMobile,
+    }) => {
+      test.skip(isMobile, 'Desktop shows the 2D texture and the 3D preview side by side.');
+      await page.addInitScript(() => {
+        const log = globalThis as unknown as { __uploads: [number, number][] };
+        log.__uploads = [];
+        const proto = WebGL2RenderingContext.prototype;
+        // eslint-disable-next-line @typescript-eslint/unbound-method -- re-bound with apply
+        const sub = proto.texSubImage2D as (...a: unknown[]) => void;
+        proto.texSubImage2D = function (this: WebGL2RenderingContext, ...args: unknown[]) {
+          if (typeof args[4] === 'number' && typeof args[5] === 'number') {
+            log.__uploads.push([args[4], args[5]]);
+          }
+          sub.apply(this, args);
+        };
+      });
+      const uploads = () =>
+        page.evaluate(() => (globalThis as unknown as { __uploads: [number, number][] }).__uploads);
+      await page.goto('/editor');
+      await page.getByRole('radio', { name: 'Off' }).click();
+      await expect(
+        page.getByRole('img', { name: '3D preview of your skin' }).locator('canvas'),
+      ).toBeVisible();
+      // The first upload is the whole 64×64 texture.
+      await expect
+        .poll(async () => (await uploads()).some(([w, h]) => w === 64 && h === 64))
+        .toBe(true);
+      await page.evaluate(() => {
+        (globalThis as unknown as { __uploads: [number, number][] }).__uploads = [];
+      });
+
+      const p = await texelPoint(page, 10, 10);
+      await page.mouse.click(p.x, p.y);
+      await expect.poll(uploads).toEqual([[1, 1]]);
+    });
+
     test('each face of a painted skin shows its own pixels from every side', async ({
       page,
       isMobile,

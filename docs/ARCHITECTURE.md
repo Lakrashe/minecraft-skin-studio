@@ -442,7 +442,34 @@ interface DocumentStore {
 - React Three Fiber + Drei. Boxes per part (inner + inflated outer shell) with
   UVs **computed from engine region tables**.
 - One `THREE.DataTexture` (64×64 RGBA, `NearestFilter`, no mipmaps, sRGB) per
-  rig; each new skin is copied in and `needsUpdate` set (16 KB per upload).
+  rig; each new skin is copied in and `needsUpdate` set.
+
+**2D ↔ 3D synchronization (owner's "Phase 5"):**
+- One source of truth: the Studio's `DocumentStore` (document + live stroke
+  preview). The 2D view, the 3D view, the flat fallback and the status bar all
+  read its snapshot.
+- The 3D view does not receive pixels as React props. `PlayerViewer` takes a
+  `SkinSource` (`core/skin-source.ts`: `getSkin()` + `subscribe()`); the
+  Studio passes `studioSkinSource`. `connectSkinSource` copies each change into
+  the rig's texture and requests one frame (`invalidate`). Pixel edits, undo
+  and redo therefore re-render no React component of the 3D view; only model,
+  layer, camera and lighting changes do. The Studio page itself does not
+  subscribe to the history (the undo/redo buttons do), and `PreviewPanel` is
+  memoized.
+- Partial uploads: after the texture's first upload (Three.js reports it via
+  `onUpdate`), `PlayerRig.setSkin` compares rows and adds one update range per
+  changed row (first to last changed pixel). A one-pixel edit uploads a 1×1
+  region; unchanged skins (e.g. a model switch) upload nothing.
+- Orientation and placement: `core/surface.ts` maps any texel to its body
+  surface point and back (`texelSurface`, `uvToTexel`), from the same
+  orientation table the UV tests use. It is the basis for painting on the 3D
+  model (1.11).
+- Tests: every used texel of both models is raycast against the real rig
+  meshes and must map back to itself; editor strokes, previews, undo and redo
+  are checked on the rig's texture at those surfaces; a component test proves
+  the viewer does not re-render on edits; real-WebGL browser tests read single
+  pixels on the head, legs, hat, back, sides and Alex's arm, through undo/redo
+  and layer toggles, and check that a one-pixel edit uploads a 1×1 region.
 - Materials (Java Edition behavior): inner layer opaque, alpha ignored (the
   game forces base alpha to 255); outer layer `transparent`, `alphaTest` 0.1
   (the game's cut-off), double-sided, drawn after the inner box. "Flat"
