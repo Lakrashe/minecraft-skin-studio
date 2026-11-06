@@ -759,6 +759,47 @@ Saw rgb(${seen.join(', ')})`);
       await expect.poll(uploads).toEqual([[1, 1]]);
     });
 
+    test('after a lost WebGL context, the whole skin comes back, with edits made meanwhile', async ({
+      page,
+      isMobile,
+    }) => {
+      test.skip(isMobile, 'Desktop shows the 2D texture and the 3D preview side by side.');
+      await page.goto('/editor'); // Explorer sample: a multicolor skin
+      await page.getByRole('radio', { name: 'Off' }).click();
+      await page.getByLabel('Lighting').selectOption({ label: 'Flat (exact colors)' });
+      await page.getByRole('button', { name: 'Front', exact: true }).click();
+
+      // An untouched spot (body front) and the pixel we will edit (head front (10,10)).
+      const body = [0.5, 18.5, 2] as const;
+      const edited = [-1.5, 29.5, 4] as const;
+      await expect
+        .poll(async () => (await colorAtPoint(page, 'Front', body)).some((v) => v > 20))
+        .toBe(true);
+      const original = await colorAtPoint(page, 'Front', body);
+
+      const canvas = page.getByRole('img', { name: '3D preview of your skin' }).locator('canvas');
+      // Keep the extension: a lost context no longer hands it out.
+      const loseContext = (action: 'loseContext' | 'restoreContext') =>
+        canvas.evaluate((element: HTMLCanvasElement, name) => {
+          const holder = element as HTMLCanvasElement & { __lose?: WEBGL_lose_context | null };
+          holder.__lose ??=
+            element.getContext('webgl2')?.getExtension('WEBGL_lose_context') ?? null;
+          if (!holder.__lose) throw new Error('WEBGL_lose_context unavailable');
+          holder.__lose[name]();
+        }, action);
+
+      await loseContext('loseContext');
+      await page.waitForTimeout(300);
+      // Edit while the 3D view has no GPU context.
+      await paintTexel(page, '#ff0000', 10, 10);
+      await loseContext('restoreContext');
+      await page.waitForTimeout(300);
+      await page.getByRole('button', { name: 'Front', exact: true }).click();
+
+      await expectPointColor(page, 'Front', edited, [255, 0, 0]);
+      await expectPointColor(page, 'Front', body, original);
+    });
+
     test('each face of a painted skin shows its own pixels from every side', async ({
       page,
       isMobile,

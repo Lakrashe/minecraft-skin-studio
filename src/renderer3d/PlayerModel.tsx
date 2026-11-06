@@ -62,6 +62,25 @@ export function PlayerModel({
       }),
     [rig, source, invalidate],
   );
+  // A lost WebGL context loses the GPU texture: rebuild it in full from the
+  // current pixels (never from pending partial updates) and redraw on restore.
+  const canvas = useThree((s) => s.gl.domElement);
+  useEffect(() => {
+    const onLost = () => {
+      rig.invalidateGpuTexture();
+    };
+    const onRestored = () => {
+      rig.invalidateGpuTexture();
+      invalidate();
+    };
+    canvas.addEventListener('webglcontextlost', onLost);
+    canvas.addEventListener('webglcontextrestored', onRestored);
+    return () => {
+      canvas.removeEventListener('webglcontextlost', onLost);
+      canvas.removeEventListener('webglcontextrestored', onRestored);
+    };
+  }, [canvas, rig, invalidate]);
+
   useLayoutEffect(() => {
     rig.setVisibility({ showInner, showOuter, visibleParts });
   }, [rig, showInner, showOuter, visibleParts]);

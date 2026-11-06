@@ -199,6 +199,18 @@ export class PlayerRig {
     return true;
   }
 
+  /**
+   * The GPU copy of the texture is gone or untrusted (e.g. the WebGL context
+   * was lost or restored): drop any pending partial ranges and upload the
+   * whole current texture next time. Later edits use partial uploads again
+   * once that full upload has happened.
+   */
+  invalidateGpuTexture(): void {
+    this.uploaded = false;
+    this.texture.clearUpdateRanges();
+    this.texture.needsUpdate = true;
+  }
+
   /** Bytes scheduled for upload by the last `setSkin` (0 when nothing changed). */
   get lastUploadBytes(): number {
     return this.lastUpload;

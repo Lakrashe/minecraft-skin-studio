@@ -460,6 +460,12 @@ interface DocumentStore {
   `onUpdate`), `PlayerRig.setSkin` compares rows and adds one update range per
   changed row (first to last changed pixel). A one-pixel edit uploads a 1×1
   region; unchanged skins (e.g. a model switch) upload nothing.
+- Context loss: the GPU copy is then gone, so `PlayerModel` listens for
+  `webglcontextlost`/`webglcontextrestored` and calls
+  `PlayerRig.invalidateGpuTexture()` — pending partial ranges are dropped and
+  the next upload is the whole current texture (edits made while lost
+  included); partial uploads resume after that. Tested in Node and with a
+  real lose/restore in the browser.
 - Orientation and placement: `core/surface.ts` maps any texel to its body
   surface point and back (`texelSurface`, `uvToTexel`), from the same
   orientation table the UV tests use. It is the basis for painting on the 3D

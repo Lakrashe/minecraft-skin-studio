@@ -141,7 +141,8 @@ WebGL. Resource release tested (every geometry, material and texture; no
 skin texture left after model switches or leaving the Studio). Owner's
 "Phase 5" step: live 2D → 3D synchronization through a skin source (no React
 re-render of the 3D view per edit), per-row partial texture uploads, texel ↔
-surface mapping, exhaustive raycast tests and per-pixel real-WebGL tests.
+surface mapping, exhaustive raycast tests and per-pixel real-WebGL tests;
+full texture rebuild after WebGL context loss (audit fix, tested).
 Remaining: wireframe, texture inspection, screenshots, animated camera
 transitions.*
 - PlayerModel with engine-derived UVs; classic/slim; outer-layer toggle;

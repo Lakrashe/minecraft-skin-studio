@@ -251,6 +251,33 @@ describe('editing → 3D texture, live', () => {
     expect(rig.setSkin(edited)).toBe(false); // nothing changed
   });
 
+  it('a lost GPU copy is rebuilt in full, never from pending partial ranges', () => {
+    const store = new DocumentStore(blankDocument());
+    const rig = rigFor('classic');
+    connectSkinSource(rig, storeSource(store));
+    rig.texture.onUpdate?.(rig.texture); // first upload done
+    paint(store, 9, 10, RED);
+    expect(rig.texture.updateRanges).toHaveLength(1); // a partial update is pending
+
+    // The context is lost: pending ranges are dropped, a full upload is scheduled.
+    const version = rig.texture.version;
+    rig.invalidateGpuTexture();
+    expect(rig.texture.updateRanges).toEqual([]);
+    expect(rig.texture.version).toBeGreaterThan(version);
+
+    // Edits while the GPU copy is missing copy everything, without ranges…
+    paint(store, 20, 22, GREEN);
+    expect(rig.lastUploadBytes).toBe(64 * 64 * 4);
+    expect(rig.texture.updateRanges).toEqual([]);
+    expect(colorOnBody(rig, 'classic', 9, 10)).toEqual(RED);
+    expect(colorOnBody(rig, 'classic', 20, 22)).toEqual(GREEN);
+
+    // …until the renderer has uploaded the full texture again.
+    rig.texture.onUpdate?.(rig.texture);
+    paint(store, 21, 22, GREEN);
+    expect(rig.lastUploadBytes).toBe(4);
+  });
+
   it('disconnecting stops updates (no work after the view unmounts)', () => {
     const store = new DocumentStore(blankDocument());
     const rig = rigFor('classic');
