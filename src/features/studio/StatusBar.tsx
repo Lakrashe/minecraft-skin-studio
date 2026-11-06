@@ -1,7 +1,8 @@
+import { useShallow } from 'zustand/react/shallow';
 import type { ReactNode } from 'react';
-import { sampleSkin } from '@/content';
 import { getPixel, regionAt } from '@/engine';
 import { useT } from '@/i18n';
+import { useStudioDocument } from './document';
 import { useStudio } from './studio-store';
 
 const hex2 = (n: number) => n.toString(16).padStart(2, '0');
@@ -9,12 +10,16 @@ const hex2 = (n: number) => n.toString(16).padStart(2, '0');
 /** Bottom bar: inspected pixel, its region and color, and the zoom level. */
 export function StatusBar() {
   const t = useT();
-  const { inspected, sampleId, model, zoom } = useStudio();
+  const { inspected, zoom } = useStudio(
+    useShallow((s) => ({ inspected: s.inspected, zoom: s.zoom })),
+  );
+  const { texture, document } = useStudioDocument();
+  const model = document.model;
 
   let detail: ReactNode = <span className="text-subtle">{t('studio.status.none')}</span>;
   if (inspected) {
     const region = regionAt(inspected.x, inspected.y, model);
-    const pixel = getPixel(sampleSkin(sampleId), inspected.x, inspected.y);
+    const pixel = getPixel(texture, inspected.x, inspected.y);
     const regionText = region
       ? [
           t(`studio.parts.${region.part}`),

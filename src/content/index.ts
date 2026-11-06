@@ -11,3 +11,4 @@ export {
   type SampleCharacter,
   type SampleId,
 } from './samples/characters';
+export { BUILT_IN_PALETTES, type BuiltInPalette, type BuiltInPaletteId } from './palettes';

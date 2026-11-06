@@ -316,7 +316,32 @@ interface DocumentStore {
 
 ---
 
-## 5a. Implemented viewer pieces (homepage + Studio step)
+## 5a. Implemented pieces
+
+### Editor (owner's "Phase 3")
+
+- **Document as implemented:** `engine/document` holds an immutable
+  `SkinDocument { model, pixels }` (one 64×64 texture). Editor layers
+  (`layers[]` in §3) arrive with outfits; the command/store design already
+  matches §4.4–4.5 so adding them extends, not replaces, it.
+- `DocumentStore` is the only writer. Commands: `pixels` (dirty-rect
+  before/after patch), `setModel`, `replace` (loading a sample or a blank skin).
+  Every command creates a new document and pixel buffer, so each revision can be
+  handed to views and undo restores exact bytes. History is bounded (200).
+- Tools (`engine/tools`): a `Stroke` turns texel positions into pixel changes,
+  writes only where the edit mask allows, and with mirror drawing also writes
+  each texel's mirror (`engine/symmetry`, an index → index involution).
+  The live stroke is shown via `setPreview`; `finish()` gives one command.
+  Bucket fill is 4-connected, exact-RGBA, limited to the start texel's face.
+- Edit mask = selected body part × editable layers ("Paint on") minus hidden
+  layers; unused texture areas are never editable.
+- The Studio (`features/studio`) keeps one store per browser tab
+  (`document.ts`); the 2D view, 3D preview, flat fallback and status bar all
+  read its snapshot. UI-only state (tool, color, view options) is in
+  `useStudio`; custom palettes in `state/palettes` (saved on the device).
+- Not built yet: saving across reloads (1.13), PNG import/export (1.12).
+
+### Viewer (homepage + Studio step)
 
 - `engine/format/regions.ts`: the region table, `partFaces`, `allFaceRegions`,
   `regionAt` (tested: every face, no overlaps, both models).

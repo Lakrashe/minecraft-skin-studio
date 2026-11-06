@@ -7,7 +7,19 @@ export {
   type ButtonVariant,
 } from './Button';
 export { cn } from './cn';
-export { contrastRatio, parseHex, readableTextOn, relativeLuminance, type Rgb } from './color';
+export {
+  contrastRatio,
+  formatHexColor,
+  hsvToRgb,
+  parseHex,
+  parseHexColor,
+  readableTextOn,
+  relativeLuminance,
+  rgbToHsv,
+  type Hsv,
+  type Rgb,
+  type Rgba,
+} from './color';
 export { Dialog, type DialogProps } from './Dialog';
 export {
   Select,
@@ -34,3 +46,4 @@ export { Toaster } from './toast/Toaster';
 export { toast, useToastStore, type Toast, type ToastTone } from './toast/toast-store';
 export { Tooltip, type TooltipAlign, type TooltipProps } from './Tooltip';
 export { useVisibility, type Visibility } from './use-visibility';
+export { ColorPicker, type ColorPickerLabels, type ColorPickerProps } from './ColorPicker';

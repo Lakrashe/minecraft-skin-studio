@@ -11,9 +11,11 @@ import {
 import { composeFlatView } from './flat-view';
 import {
   clampZoom,
+  fitLabel,
   fitZoom,
-  isDimmed,
+  labelFontSize,
   moveTexel,
+  pinchZoom,
   screenToTexel,
   visiblePixels,
 } from './texture-view-math';
@@ -140,11 +142,42 @@ describe('texture view math', () => {
     expect(pixels[(outer.y * 64 + outer.x) * 4 + 3]).toBe(0);
     expect(getPixel(skin, outer.x, outer.y)?.a).toBe(255);
   });
+});
 
-  it('dims unused texels and parts outside the focus', () => {
-    expect(isDimmed(0, 0, 'classic', 'all')).toBe(true); // unused
-    expect(isDimmed(8, 8, 'classic', 'all')).toBe(false);
-    expect(isDimmed(8, 8, 'classic', 'body')).toBe(true);
-    expect(isDimmed(8, 8, 'classic', 'head')).toBe(false);
+describe('pinchZoom', () => {
+  it('scales the starting zoom by the change in finger distance', () => {
+    expect(pinchZoom(8, 100, 200)).toBe(16);
+    expect(pinchZoom(8, 100, 50)).toBe(4);
+    expect(pinchZoom(8, 100, 110)).toBe(9); // rounds to whole steps
+    expect(pinchZoom(8, 100, 100)).toBe(8);
+  });
+
+  it('stays within the zoom limits and ignores degenerate distances', () => {
+    expect(pinchZoom(20, 100, 1000)).toBe(24);
+    expect(pinchZoom(4, 100, 1)).toBe(2);
+    expect(pinchZoom(8, 0, 100)).toBe(8);
+  });
+});
+
+describe('face labels', () => {
+  // A fake font: every character is 6 px wide.
+  const measure = (text: string) => text.length * 6;
+
+  it('uses the longest label that fits, then shorter ones', () => {
+    const candidates = ['Head · Front', 'Front'];
+    expect(fitLabel(candidates, 100, 40, 11, measure)).toBe('Head · Front'); // 72 px
+    expect(fitLabel(candidates, 40, 40, 11, measure)).toBe('Front'); // 30 px
+    expect(fitLabel(candidates, 20, 40, 11, measure)).toBeNull();
+  });
+
+  it('skips faces too short for the text and empty candidates', () => {
+    expect(fitLabel(['Top'], 100, 12, 11, measure)).toBeNull();
+    expect(fitLabel(['', 'Top'], 100, 40, 11, measure)).toBe('Top');
+  });
+
+  it('scales the font with zoom within 9–13 px', () => {
+    expect(labelFontSize(6)).toBe(9);
+    expect(labelFontSize(10)).toBe(11);
+    expect(labelFontSize(24)).toBe(13);
   });
 });

@@ -16,11 +16,14 @@ Implementation plan for `docs/SPECIFICATION.md`, following its five phases
 **Status:** Phase 1 in progress. Done: 1.1–1.2 ("Project Foundation") and the
 owner's "Homepage and User Interface" step, which built 1.16 (acceptance still
 open: Lighthouse not measured) and parts of 1.3, 1.9, 1.10 and 1.14 (marked
-below); its audit corrections are applied. Next, when the owner requests it: finish
-1.3 (engine core), then 1.4 (document store and history).
+below); its audit corrections are applied. The owner's "Advanced 2D Minecraft
+Skin Editor" step (called "Phase 3" by the owner) then built most of 1.4, 1.5,
+1.6 and 1.8 and more of 1.3 and 1.9 (marked below). Biggest gaps for a usable
+product: saving (1.13) and PNG import/export (1.12).
 
-> Naming note: the owner called the homepage step "Phase 2". In this roadmap,
-> Phase 2 remains *Creative tools*; the homepage step belongs to Phase 1.
+> Naming note: the owner called the homepage step "Phase 2" and the editor
+> step "Phase 3". In this roadmap, Phase 2 remains *Creative tools* and Phase 3
+> *AI*; both owner steps belong to Phase 1.
 
 ---
 
@@ -68,27 +71,44 @@ needs them (no unused components).*
 - **Accept:** theme and accent switch live and persist; all primitives keyboard-accessible; layouts work at phone/tablet/desktop widths.
 
 ### 1.3 Engine core (partly done)
-*Done: types, `PixelBuffer` basics, region tables and lookup (tested). Remaining:
-masks, symmetry maps, flatten, legacy conversion, import validation, export rules.*
+*Done: types, `PixelBuffer` basics, region tables and lookup, edit masks
+(part × skin layer, unused areas excluded), mirror maps, line/rectangle/flood
+fill shapes (all tested). Remaining: flatten of editor layers, legacy
+conversion, import validation, export rules.*
 - PixelBuffer, Rgba, raster ops, region tables (classic/slim × inner/outer),
   region lookup, masks (part, skin layer, used pixels), symmetry maps,
   flatten, legacy 64×32 conversion, import validation, export rules.
 - **Accept:** tests for every face rect, non-overlap, lookup round-trip, mask
   correctness, symmetry pairs, legacy conversion with synthetic fixtures.
 
-### 1.4 Document store and history
+### 1.4 Document store and history (partly done)
+*Done: immutable `SkinDocument` (model + 64×64 texture), pixel/model/replace
+commands with apply/invert, `DocumentStore` with bounded history (200),
+revisions, live stroke preview and subscriptions; §4.6 invariants 1–4, 6–8
+tested. Remaining: transactions (invariant 5), serialization + migrations,
+editor layers.*
 - Commands, apply/invert, transactions, bounded history, revisions, preview
   buffer, serialization + migrations.
 - **Accept:** all invariants in ARCHITECTURE §4.6 tested.
 
-### 1.5 2D canvas editor
+### 1.5 2D canvas editor (built; acceptance partly verified)
+*Done: pixel-exact canvas, checkerboard, zoom (buttons, keys, Ctrl+wheel at the
+pointer, two-finger pinch), pan (Space-drag, middle mouse, two fingers, Pan
+tool, scrollbars), grid, face outlines, dimming outside the editable area,
+body-part selector, layer visibility and "Paint on" editability. A second
+finger cancels the stroke the first one started. Optional face labels (from 6×
+zoom, longest translated name that fits). Acceptance status: coordinate math is
+unit-tested; exact-texel painting is browser-tested at the default zoom only.*
 - Canvas rendering, transparency checkerboard, zoom/pan (mouse, trackpad,
   touch), pixel grid toggle, face outlines and labels, inactive-area dimming.
 - Body-part selector and full-texture mode; inner/outer skin-layer visibility
   and editability toggles.
 - **Accept:** coordinate transforms tested; painting lands on the exact texel at every zoom.
 
-### 1.6 Drawing tools
+### 1.6 Drawing tools (mostly done)
+*Done: pencil, eraser, bucket (within one face), eyedropper, line, rectangle
+(outline/filled), mirror drawing; one history entry per stroke; undo/redo
+buttons and shortcuts. Remaining: brush size, fill-whole-area, clear layer.*
 - Pencil (brush size), eraser, paint bucket, fill, eyedropper/color picker,
   line, rectangle, mirror drawing, symmetry mode, clear layer.
 - Each stroke = one history entry; undo/redo buttons + shortcuts.
@@ -99,7 +119,10 @@ masks, symmetry maps, flatten, legacy conversion, import validation, export rule
   color replacement (within selection/mask).
 - **Accept:** tested in engine; paste/move are single undoable entries.
 
-### 1.8 Color panel (editor essentials)
+### 1.8 Color panel (mostly done)
+*Done: HSV picker (area + hue + opacity), HEX input with alpha and validation,
+built-in palettes, custom palettes saved on the device. Remaining: RGB inputs,
+recently used colors.*
 - Color wheel (own component), HEX and RGB inputs, recently used colors,
   custom palettes, saved palettes (persisted).
 - **Accept:** inputs validate and stay in sync; palettes persist across reloads.
@@ -107,8 +130,8 @@ masks, symmetry maps, flatten, legacy conversion, import validation, export rule
 ### 1.9 3D viewer (partly done)
 *Done: player model from engine UVs, classic/slim, inner/outer toggles, per-part
 visibility, orbit controls, camera presets, fullscreen, no-WebGL fallback.
-Remaining: wireframe, texture inspection, lighting presets, screenshots, live
-updates from the document store.*
+Live updates from the document store (every stroke, undo and redo).
+Remaining: wireframe, texture inspection, lighting presets, screenshots.*
 - PlayerModel with engine-derived UVs; classic/slim; outer-layer toggle;
   per-part visibility; correct transparency; instant updates from the store.
 - Orbit rotate/zoom/pan, front/back/side/top/reset presets, fullscreen,

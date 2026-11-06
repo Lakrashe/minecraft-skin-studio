@@ -7,7 +7,10 @@ gallery, and an optional marketplace.
 
 > **Status:** Phase 1 in progress. The foundation, the homepage (with a live 3D
 > character) and the Studio in viewer mode (2D texture + 3D preview of original
-> sample characters) are built. Editing, import and export are not built yet. See [`docs/DEVELOPMENT_ROADMAP.md`](docs/DEVELOPMENT_ROADMAP.md).
+> sample characters) are built, and the Studio is a working 64×64 pixel editor
+> (pencil, eraser, bucket, eyedropper, line, rectangle, mirror drawing, undo/redo,
+> color picker, palettes) with a live 3D preview. Saving across reloads and PNG
+> import/export are not built yet. See [`docs/DEVELOPMENT_ROADMAP.md`](docs/DEVELOPMENT_ROADMAP.md).
 
 ## Documentation
 
