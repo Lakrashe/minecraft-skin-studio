@@ -1,6 +1,6 @@
 import { OrbitControls } from '@react-three/drei';
 import { useThree } from '@react-three/fiber';
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import type { Vector3 } from 'three';
 import type { BodyPart, PixelBuffer, SkinModel } from '@/engine';
 import type { AnimationId } from '@/rig';
@@ -46,11 +46,21 @@ interface OrbitLike {
   update(): void;
 }
 
+/**
+ * Moves the camera to a preset when `view` or `request` changes. A new
+ * controls instance (see the OrbitControls `key` below) must not snap the
+ * camera back to the preset, so each request is applied once — again only if
+ * it was first applied before the controls existed.
+ */
 function CameraPreset({ view, request }: { view: CameraView; request: number }) {
   const camera = useThree((s) => s.camera);
   const controls = useThree((s) => s.controls) as unknown as OrbitLike | null;
   const invalidate = useThree((s) => s.invalidate);
+  const applied = useRef<string | null>(null);
   useEffect(() => {
+    const key = `${view}:${String(request)}:${controls ? 'controls' : 'none'}`;
+    if (applied.current === key) return;
+    applied.current = key;
     camera.position.set(...cameraPosition(view));
     camera.lookAt(...PLAYER_CENTER);
     if (controls) {
@@ -135,7 +145,13 @@ export default function PlayerViewer({
         animation={animation}
         paused={paused}
       />
+      {/*
+        Damping keeps auto-rotation's momentum for ~100 frames after it stops
+        (seconds on slow devices). Remounting the controls when auto-rotation
+        turns off drops that momentum, so pausing stops at once.
+      */}
       <OrbitControls
+        key={autoRotate ? 'auto-rotate' : 'manual'}
         makeDefault
         target={PLAYER_CENTER}
         enablePan={controls === 'full'}

@@ -320,10 +320,14 @@ test.describe('3D motion and render budget', () => {
     await expect(hero).toHaveAttribute('data-frameloop', 'always');
     expect(await drawsDuring(hero)).toBeGreaterThan(0);
 
+    // Simulate a slow device (CI renders at ~10 fps): pausing must stop
+    // drawing regardless of frame rate.
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 8 });
+
     await page.getByRole('button', { name: 'Pause animation' }).first().click();
     await expect(hero).toHaveAttribute('data-frameloop', 'demand');
-    // Orbit damping eases the rotation out over ~1.5 s, then drawing stops.
-    await expect.poll(() => drawsDuring(hero), { timeout: 8000 }).toBe(0);
+    expect(await drawsDuring(hero)).toBe(0);
     await expect(page.getByRole('button', { name: 'Play animation' }).first()).toBeVisible();
   });
 
