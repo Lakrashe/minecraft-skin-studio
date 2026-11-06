@@ -26,6 +26,13 @@ describe('playerLayout', () => {
     expect(left.pivot[0] + left.offset[0] - left.size[0] / 2).toBe(4);
   });
 
+  it('hips sit at ±1.9 and slim shoulders half a pixel lower (Java Edition)', () => {
+    expect(byPart('classic')['rightLeg']?.pivot).toEqual([-1.9, 12, 0]);
+    expect(byPart('classic')['leftLeg']?.pivot).toEqual([1.9, 12, 0]);
+    expect(byPart('classic')['rightArm']?.pivot).toEqual([-5, 22, 0]);
+    expect(byPart('slim')['rightArm']?.pivot).toEqual([-5, 21.5, 0]);
+  });
+
   it('slim arms are 3 units wide', () => {
     expect(byPart('slim')['rightArm']?.size).toEqual([3, 12, 4]);
     expect(byPart('classic')['rightArm']?.size).toEqual([4, 12, 4]);

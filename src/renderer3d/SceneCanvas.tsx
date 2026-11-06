@@ -1,6 +1,6 @@
 import { Canvas } from '@react-three/fiber';
 import type { ReactNode } from 'react';
-import type { FrameLoop } from './frame-loop';
+import type { FrameLoop } from './core/frame-loop';
 import { RenderErrorBoundary } from './RenderErrorBoundary';
 import { isWebGLAvailable } from './webgl';
 

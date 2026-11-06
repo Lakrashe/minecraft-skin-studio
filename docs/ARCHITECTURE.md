@@ -344,9 +344,13 @@ interface DocumentStore {
   command whose "before" state is not the current document
   (`commandMatches`), so a stale stroke can never enter history.
 - Live previews are published only when a pointer move changes the stroke's
-  pixels. `PlayerModel` keeps one `DataTexture` and one pair of materials and
-  copies each new texture into it (`needsUpdate`), so drawing does not
-  allocate GPU resources per change.
+  pixels. The 3D model (`PlayerRig`, driven by `PlayerModel`) keeps one
+  `DataTexture` and two pairs of materials — lit (inner/outer) and unlit for
+  flat lighting (inner/outer) — and copies each new texture into it
+  (`needsUpdate`), so drawing does not allocate GPU resources per change.
+  `dispose()` frees all 12 geometries, the 4 materials and the texture; a unit
+  test checks each is released exactly once, and a browser test checks that
+  model switches and leaving the Studio leave no skin texture behind.
 - The Studio (`features/studio`) keeps one store per browser tab
   (`document.ts`); the 2D view, 3D preview, flat fallback and status bar all
   read its snapshot. UI-only state (tool, color, view options) is in
@@ -361,11 +365,12 @@ interface DocumentStore {
   region tables (`SkinPainter`); tests assert 64×64, opaque inner layer,
   transparent unused pixels and determinism.
 - `rig/animation.ts`: `idle` and `walk` clips as pure `Pose` functions.
-- `renderer3d/player-geometry.ts` (pure, tested): joint pivots and box offsets,
+- `renderer3d/core/player-geometry.ts` (pure, tested): joint pivots and box offsets,
   and `boxUvs`, which maps net faces to Three.js `BoxGeometry` order
   (+x ← `left`, −x ← `right`, bottom face flipped vertically).
-  `PlayerModel` uses an sRGB nearest-filtered `DataTexture`, an opaque inner
-  material and an alpha-tested, double-sided outer shell (+0.5 head, +0.25 rest).
+  The model (now `core/PlayerRig`, see §6) uses an sRGB nearest-filtered
+  `DataTexture`, an opaque inner material and an alpha-tested, double-sided
+  outer shell (+0.5 head, +0.25 rest).
   `PlayerViewer` adds Drei `OrbitControls` and camera presets.
 - `editor2d/TextureView`: the canvas view, read-only in this step and the
   drawing surface since the editor step (checkerboard, grid, face outlines,
@@ -418,19 +423,38 @@ interface DocumentStore {
 
 ## 6. 3D renderer (`renderer3d/`)
 
-- React Three Fiber + Drei. `PlayerModel` builds boxes for each part (inner +
-  inflated outer shell) with UVs **computed from engine region tables**.
-- One `THREE.DataTexture` (64×64 RGBA, `NearestFilter`, no mipmaps, sRGB).
-  On every store change, copy the flattened buffer into the texture and set
-  `needsUpdate` — done in a store subscription, **not** via React state.
-  (64×64×4 = 16 KB; a full upload per change is cheap and simpler than sub-rects.)
-- Materials: inner layer `alphaTest` cutout; outer layer `transparent` with
-  `alphaTest` and `depthWrite` tuned to avoid sorting artifacts; `side`
-  double for outer shell. Wireframe and texture-inspection (UV checker/face
-  highlight) modes.
-- Camera: `OrbitControls` (rotate/zoom/pan), animated presets (front, back,
-  side, top, reset), fullscreen via Fullscreen API.
-- Lighting presets as data (studio, daylight, sunset, neon, cinematic) + intensity.
+**Implemented structure (owner's "Phase 4"):**
+- `renderer3d/core/` — the rendering engine: plain Three.js and pure data, no
+  React and no DOM (enforced by lint, fixture-tested). `PlayerRig` builds the
+  player (6 pivots, 12 meshes) from `player-geometry` and engine region tables,
+  owns one 64×64 `DataTexture` and the materials, and exposes `setSkin`,
+  `setVisibility`, `setUnlit`, `setPose`, `dispose`. `lighting.ts` defines the
+  lighting presets as data; `camera-views.ts` and `frame-loop.ts` are pure.
+  All of it is tested in Node: sizes and joints of both models, and the UV of
+  every corner of all 72 faces per model against an independent orientation
+  table.
+- `renderer3d/*.tsx` — the React binding: `SceneCanvas`, `PlayerViewer`
+  (orbit controls, camera presets, lights from a preset, frame loop) and a thin
+  `PlayerModel` that drives a `PlayerRig`. Features import only `@/renderer3d`;
+  the core loads with the lazy 3D chunk.
+
+**Design and rules:**
+- React Three Fiber + Drei. Boxes per part (inner + inflated outer shell) with
+  UVs **computed from engine region tables**.
+- One `THREE.DataTexture` (64×64 RGBA, `NearestFilter`, no mipmaps, sRGB) per
+  rig; each new skin is copied in and `needsUpdate` set (16 KB per upload).
+- Materials (Java Edition behavior): inner layer opaque, alpha ignored (the
+  game forces base alpha to 255); outer layer `transparent`, `alphaTest` 0.1
+  (the game's cut-off), double-sided, drawn after the inner box. "Flat"
+  lighting swaps to unlit materials without tone mapping, so pixels show their
+  exact colors. Wireframe and texture-inspection modes: not built yet.
+- Camera: `OrbitControls` (rotate/zoom/pan), presets (front, back, side, top,
+  reset) that jump to the view immediately (`camera.position.set` +
+  `lookAt`), fullscreen via Fullscreen API. Animated transitions between
+  presets: not built yet.
+- Lighting presets as data (studio, daylight, sunset, neon, cinematic, flat) +
+  intensity 25–200 % (implemented; `flat` is unlit, exact colors).
+- 360° turntable: orbit auto-rotation, an explicit user choice in the Studio.
 - Animation: `rig/` clips sampled per frame in `useFrame`, applied to part
   pivots; pause/resume; custom poses from `rig`.
 - Picking for paint-on-model: raycast → face + UV → texel → engine tool.

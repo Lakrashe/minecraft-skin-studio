@@ -21,9 +21,10 @@ Skin Editor" step (called "Phase 3" by the owner) then built most of 1.4, 1.5,
 1.6 and 1.8 and more of 1.3 and 1.9 (marked below). Biggest gaps for a usable
 product: saving (1.13) and PNG import/export (1.12).
 
-> Naming note: the owner called the homepage step "Phase 2" and the editor
-> step "Phase 3". In this roadmap, Phase 2 remains *Creative tools* and Phase 3
-> *AI*; both owner steps belong to Phase 1.
+> Naming note: the owner called the homepage step "Phase 2", the editor
+> step "Phase 3" and the 3D rendering step "Phase 4". In this roadmap, Phase 2
+> remains *Creative tools*, Phase 3 *AI* and Phase 4 *Community*; all three
+> owner steps belong to Phase 1.
 
 ---
 
@@ -130,8 +131,14 @@ recently used colors.*
 ### 1.9 3D viewer (partly done)
 *Done: player model from engine UVs, classic/slim, inner/outer toggles, per-part
 visibility, orbit controls, camera presets, fullscreen, no-WebGL fallback.
-Live updates from the document store (every stroke, undo and redo).
-Remaining: wireframe, texture inspection, lighting presets, screenshots.*
+Live updates from the document store (every stroke, undo and redo). Owner's
+"Phase 4" step: React-free rendering core (`renderer3d/core`), Java-accurate
+geometry (hips ±1.9, slim shoulders 0.5 lower — verify), Java transparency
+rules, lighting presets + intensity, flat exact-color mode, 360° turntable;
+geometry and every face's UVs tested in Node, face colors tested in real
+WebGL. Resource release tested (every geometry, material and texture; no
+skin texture left after model switches or leaving the Studio). Remaining:
+wireframe, texture inspection, screenshots, animated camera transitions.*
 - PlayerModel with engine-derived UVs; classic/slim; outer-layer toggle;
   per-part visibility; correct transparency; instant updates from the store.
 - Orbit rotate/zoom/pan, front/back/side/top/reset presets, fullscreen,

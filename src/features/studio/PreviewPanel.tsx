@@ -12,10 +12,29 @@ import { useShallow } from 'zustand/react/shallow';
 import { FlatPreview } from '@/editor2d';
 import { BODY_PARTS, type BodyPart } from '@/engine';
 import { useT } from '@/i18n';
-import { CAMERA_VIEWS, isWebGLAvailable, LazyPlayerViewer, type CameraView } from '@/renderer3d';
+import {
+  CAMERA_VIEWS,
+  isWebGLAvailable,
+  LazyPlayerViewer,
+  LIGHTING_PRESETS,
+  MAX_LIGHT_INTENSITY,
+  MIN_LIGHT_INTENSITY,
+  type CameraView,
+  type LightingPreset,
+} from '@/renderer3d';
 import { ANIMATIONS, type AnimationId } from '@/rig';
 import { useReducedMotion } from '@/state';
-import { Button, IconButton, PixelLoader, SegmentedControl, toast, useVisibility } from '@/ui';
+import {
+  Button,
+  IconButton,
+  PixelLoader,
+  SegmentedControl,
+  Select,
+  Slider,
+  Switch,
+  toast,
+  useVisibility,
+} from '@/ui';
 import { useStudioDocument } from './document';
 import { effectiveAnimation, useStudio } from './studio-store';
 
@@ -58,10 +77,16 @@ export function PreviewPanel() {
       focus: st.focus,
       animation: st.animation,
       paused: st.paused,
+      turntable: st.turntable,
+      lighting: st.lighting,
+      lightIntensity: st.lightIntensity,
       view: st.view,
       viewRequest: st.viewRequest,
       setAnimation: st.setAnimation,
       togglePaused: st.togglePaused,
+      setTurntable: st.setTurntable,
+      setLighting: st.setLighting,
+      setLightIntensity: st.setLightIntensity,
       showView: st.showView,
     })),
   );
@@ -85,6 +110,11 @@ export function PreviewPanel() {
     () => new Set(s.focus === 'all' ? BODY_PARTS : [s.focus]),
     [s.focus],
   );
+
+  const lightingOptions = LIGHTING_PRESETS.map((id: LightingPreset) => ({
+    value: id,
+    label: t(`studio.lightingPresets.${id}`),
+  }));
 
   const animationOptions = ANIMATIONS.map((id: AnimationId) => ({
     value: id,
@@ -150,6 +180,9 @@ export function PreviewPanel() {
             visibleParts={visibleParts}
             animation={animation}
             paused={s.paused}
+            autoRotate={s.turntable}
+            lighting={s.lighting}
+            lightIntensity={s.lightIntensity}
             active={visible}
             view={s.view}
             viewRequest={s.viewRequest}
@@ -199,6 +232,35 @@ export function PreviewPanel() {
               onClick={s.togglePaused}
             />
           </div>
+          <Switch
+            label={t('studio.turntable')}
+            description={t('studio.turntableHint')}
+            checked={s.turntable}
+            onChange={s.setTurntable}
+          />
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+            <Select
+              label={t('studio.lighting')}
+              value={s.lighting}
+              options={lightingOptions}
+              onChange={s.setLighting}
+            />
+            <Slider
+              label={t('studio.lightIntensity')}
+              min={MIN_LIGHT_INTENSITY * 100}
+              max={MAX_LIGHT_INTENSITY * 100}
+              step={5}
+              value={Math.round(s.lightIntensity * 100)}
+              disabled={s.lighting === 'flat'}
+              formatValue={(v) => `${String(v)}%`}
+              onChange={(v) => {
+                s.setLightIntensity(v / 100);
+              }}
+            />
+          </div>
+          {s.lighting === 'flat' && (
+            <p className="text-xs text-muted">{t('studio.lightingFlatHint')}</p>
+          )}
         </div>
       )}
     </div>

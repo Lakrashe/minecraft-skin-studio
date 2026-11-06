@@ -2,6 +2,13 @@
  * Pure geometry math for the player model (no Three.js), so it can be unit
  * tested. Units: 1 texture pixel = 1 model unit; feet at y = 0, player faces +z.
  * See docs/MINECRAFT_SKIN_FORMAT.md §9.
+ *
+ * Values follow Java Edition's player model (y converted from the game's
+ * "down from the neck" axis: y = 24 − y_java): head and body hang from the
+ * neck at y = 24; arms pivot at the shoulders (±5, 22) — slim arms at
+ * (±5, 21.5), half a pixel lower; legs pivot at the hips (±1.9, 12), so they
+ * sit 0.1 inside the body's outline and overlap 0.2 at the center (hidden).
+ * Overlays are inflated 0.5 per side for the hat and 0.25 for the rest.
  */
 import {
   BODY_PARTS,
@@ -30,6 +37,14 @@ export interface PartLayout {
   readonly outerInflate: number;
 }
 
+/** Hip joints sit 1.9 from the center (Java Edition), not 2. */
+export const HIP_X = 1.9;
+
+/** Shoulder height: slim (Alex) arms hang half a pixel lower in Java Edition **(verify)**. */
+export function shoulderY(model: SkinModel): number {
+  return model === 'slim' ? 21.5 : 22;
+}
+
 /** Joint positions and box offsets per part. The player's right side is −x. */
 export function playerLayout(model: SkinModel): readonly PartLayout[] {
   return BODY_PARTS.map((part): PartLayout => {
@@ -41,20 +56,26 @@ export function playerLayout(model: SkinModel): readonly PartLayout[] {
       case 'body':
         return { part, pivot: [0, 24, 0], offset: [0, -6, 0], size, outerInflate: 0.25 };
       case 'rightArm':
-        // Shoulder at x = −5; the arm's outer edge stays at x = −4 − w.
+        // Shoulder at x = −5; the arm's inner edge touches the body at x = −4.
         return {
           part,
-          pivot: [-5, 22, 0],
+          pivot: [-5, shoulderY(model), 0],
           offset: [-(w / 2 - 1), -4, 0],
           size,
           outerInflate: 0.25,
         };
       case 'leftArm':
-        return { part, pivot: [5, 22, 0], offset: [w / 2 - 1, -4, 0], size, outerInflate: 0.25 };
+        return {
+          part,
+          pivot: [5, shoulderY(model), 0],
+          offset: [w / 2 - 1, -4, 0],
+          size,
+          outerInflate: 0.25,
+        };
       case 'rightLeg':
-        return { part, pivot: [-2, 12, 0], offset: [0, -6, 0], size, outerInflate: 0.25 };
+        return { part, pivot: [-HIP_X, 12, 0], offset: [0, -6, 0], size, outerInflate: 0.25 };
       case 'leftLeg':
-        return { part, pivot: [2, 12, 0], offset: [0, -6, 0], size, outerInflate: 0.25 };
+        return { part, pivot: [HIP_X, 12, 0], offset: [0, -6, 0], size, outerInflate: 0.25 };
     }
   });
 }

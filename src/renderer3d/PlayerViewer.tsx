@@ -1,11 +1,19 @@
 import { OrbitControls } from '@react-three/drei';
 import { useThree } from '@react-three/fiber';
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import type { Vector3 } from 'three';
 import type { BodyPart, PixelBuffer, SkinModel } from '@/engine';
 import type { AnimationId } from '@/rig';
-import { cameraPosition, PLAYER_CENTER, type CameraView } from './camera-views';
-import { viewerFrameLoop } from './frame-loop';
+import {
+  cameraPosition,
+  DEFAULT_LIGHTING,
+  lightingRig,
+  PLAYER_CENTER,
+  viewerFrameLoop,
+  type CameraView,
+  type LightingPreset,
+  type LightingRig,
+} from './core';
 import { PlayerModel } from './PlayerModel';
 import SceneCanvas from './SceneCanvas';
 
@@ -22,6 +30,10 @@ export interface PlayerViewerProps {
   readonly animation?: AnimationId;
   readonly paused?: boolean;
   readonly autoRotate?: boolean;
+  /** Lighting preset (`flat` = unlit, exact texture colors). Defaults to `studio`. */
+  readonly lighting?: LightingPreset;
+  /** Multiplies every light's intensity (clamped to 0.25–2). */
+  readonly lightIntensity?: number;
   /**
    * False while the view is offscreen or hidden: nothing is drawn until it
    * becomes active again. Defaults to true.
@@ -81,6 +93,7 @@ interface PictureInputs {
   readonly visibleParts: ReadonlySet<BodyPart> | undefined;
   readonly animation: AnimationId;
   readonly paused: boolean;
+  readonly lights: LightingRig;
 }
 
 /**
@@ -101,8 +114,41 @@ function RenderOnChange(p: PictureInputs) {
     p.visibleParts,
     p.animation,
     p.paused,
+    p.lights,
   ]);
   return null;
+}
+
+/** Three.js lights for a lighting rig (pure data from `core/lighting`). */
+function Lights({ rig }: { rig: LightingRig }) {
+  return (
+    <>
+      {rig.lights.map((light, i) => {
+        switch (light.kind) {
+          case 'ambient':
+            return <ambientLight key={i} color={light.color} intensity={light.intensity} />;
+          case 'hemisphere':
+            return (
+              <hemisphereLight
+                key={i}
+                color={light.color}
+                groundColor={light.groundColor}
+                intensity={light.intensity}
+              />
+            );
+          case 'directional':
+            return (
+              <directionalLight
+                key={i}
+                color={light.color}
+                intensity={light.intensity}
+                position={light.position}
+              />
+            );
+        }
+      })}
+    </>
+  );
 }
 
 /** Interactive 3D player preview. Load via `LazyPlayerViewer` (index.ts). */
@@ -115,6 +161,8 @@ export default function PlayerViewer({
   animation = 'idle',
   paused = false,
   autoRotate = false,
+  lighting = DEFAULT_LIGHTING,
+  lightIntensity = 1,
   active = true,
   controls = 'full',
   view = 'reset',
@@ -125,6 +173,7 @@ export default function PlayerViewer({
   className,
 }: PlayerViewerProps) {
   const frameloop = viewerFrameLoop({ active, autoRotate, animation, paused });
+  const lights = useMemo(() => lightingRig(lighting, lightIntensity), [lighting, lightIntensity]);
   return (
     <SceneCanvas
       label={label}
@@ -133,9 +182,7 @@ export default function PlayerViewer({
       frameloop={frameloop}
       overlay={overlay}
     >
-      <ambientLight intensity={1.4} />
-      <directionalLight position={[30, 50, 40]} intensity={1.7} />
-      <directionalLight position={[-35, 20, -40]} intensity={0.6} />
+      <Lights rig={lights} />
       <PlayerModel
         skin={skin}
         model={model}
@@ -144,6 +191,7 @@ export default function PlayerViewer({
         {...(visibleParts ? { visibleParts } : {})}
         animation={animation}
         paused={paused}
+        unlit={lights.unlit}
       />
       {/*
         Damping keeps auto-rotation's momentum for ~100 frames after it stops
@@ -172,6 +220,7 @@ export default function PlayerViewer({
         visibleParts={visibleParts}
         animation={animation}
         paused={paused}
+        lights={lights}
       />
     </SceneCanvas>
   );
