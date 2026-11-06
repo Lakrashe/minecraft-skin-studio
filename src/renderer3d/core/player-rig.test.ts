@@ -19,6 +19,7 @@ import {
   NearestFilter,
   SRGBColorSpace,
   Vector3,
+  type Material,
 } from 'three';
 import { describe, expect, it } from 'vitest';
 import {
@@ -281,9 +282,39 @@ describe('skin texture and transparency', () => {
     expect(rig.meshes.every((m) => m.mesh.visible)).toBe(true);
   });
 
-  it('dispose releases everything without errors', () => {
-    expect(() => {
-      built('slim').dispose();
-    }).not.toThrow();
-  });
+  it.each(SKIN_MODELS)(
+    '%s: dispose frees every owned resource exactly once (12 geometries, 4 materials, the texture)',
+    (model) => {
+      const rig = built(model);
+      // Collect both material sets by visiting flat (unlit) mode and back.
+      const materials = new Set<Material>();
+      const collect = () => {
+        for (const { mesh } of rig.meshes) materials.add(mesh.material);
+      };
+      collect();
+      rig.setUnlit(true);
+      collect();
+      rig.setUnlit(false);
+      const geometries = new Set(rig.meshes.map(({ mesh }) => mesh.geometry));
+      expect(geometries.size).toBe(12);
+      expect(materials.size).toBe(4);
+
+      const disposed = new Map<object, number>();
+      const watch = (resource: {
+        addEventListener: (type: 'dispose', listener: () => void) => void;
+      }) => {
+        disposed.set(resource, 0);
+        resource.addEventListener('dispose', () => {
+          disposed.set(resource, (disposed.get(resource) ?? 0) + 1);
+        });
+      };
+      geometries.forEach(watch);
+      materials.forEach(watch);
+      watch(rig.texture);
+
+      rig.dispose();
+      expect(disposed.size).toBe(17);
+      for (const count of disposed.values()) expect(count).toBe(1);
+    },
+  );
 });

@@ -344,9 +344,13 @@ interface DocumentStore {
   command whose "before" state is not the current document
   (`commandMatches`), so a stale stroke can never enter history.
 - Live previews are published only when a pointer move changes the stroke's
-  pixels. `PlayerModel` keeps one `DataTexture` and one pair of materials and
-  copies each new texture into it (`needsUpdate`), so drawing does not
-  allocate GPU resources per change.
+  pixels. The 3D model (`PlayerRig`, driven by `PlayerModel`) keeps one
+  `DataTexture` and two pairs of materials — lit (inner/outer) and unlit for
+  flat lighting (inner/outer) — and copies each new texture into it
+  (`needsUpdate`), so drawing does not allocate GPU resources per change.
+  `dispose()` frees all 12 geometries, the 4 materials and the texture; a unit
+  test checks each is released exactly once, and a browser test checks that
+  model switches and leaving the Studio leave no skin texture behind.
 - The Studio (`features/studio`) keeps one store per browser tab
   (`document.ts`); the 2D view, 3D preview, flat fallback and status bar all
   read its snapshot. UI-only state (tool, color, view options) is in
@@ -361,11 +365,12 @@ interface DocumentStore {
   region tables (`SkinPainter`); tests assert 64×64, opaque inner layer,
   transparent unused pixels and determinism.
 - `rig/animation.ts`: `idle` and `walk` clips as pure `Pose` functions.
-- `renderer3d/player-geometry.ts` (pure, tested): joint pivots and box offsets,
+- `renderer3d/core/player-geometry.ts` (pure, tested): joint pivots and box offsets,
   and `boxUvs`, which maps net faces to Three.js `BoxGeometry` order
   (+x ← `left`, −x ← `right`, bottom face flipped vertically).
-  `PlayerModel` uses an sRGB nearest-filtered `DataTexture`, an opaque inner
-  material and an alpha-tested, double-sided outer shell (+0.5 head, +0.25 rest).
+  The model (now `core/PlayerRig`, see §6) uses an sRGB nearest-filtered
+  `DataTexture`, an opaque inner material and an alpha-tested, double-sided
+  outer shell (+0.5 head, +0.25 rest).
   `PlayerViewer` adds Drei `OrbitControls` and camera presets.
 - `editor2d/TextureView`: the canvas view, read-only in this step and the
   drawing surface since the editor step (checkerboard, grid, face outlines,
@@ -443,8 +448,10 @@ interface DocumentStore {
   (the game's cut-off), double-sided, drawn after the inner box. "Flat"
   lighting swaps to unlit materials without tone mapping, so pixels show their
   exact colors. Wireframe and texture-inspection modes: not built yet.
-- Camera: `OrbitControls` (rotate/zoom/pan), animated presets (front, back,
-  side, top, reset), fullscreen via Fullscreen API.
+- Camera: `OrbitControls` (rotate/zoom/pan), presets (front, back, side, top,
+  reset) that jump to the view immediately (`camera.position.set` +
+  `lookAt`), fullscreen via Fullscreen API. Animated transitions between
+  presets: not built yet.
 - Lighting presets as data (studio, daylight, sunset, neon, cinematic, flat) +
   intensity 25–200 % (implemented; `flat` is unlit, exact colors).
 - 360° turntable: orbit auto-rotation, an explicit user choice in the Studio.

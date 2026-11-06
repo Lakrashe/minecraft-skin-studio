@@ -659,6 +659,75 @@ Saw rgb(${seen.join(', ')})`);
       await expectColor(page, [255, 255, 0]);
     });
 
+    test('skin textures are freed on model switches and when leaving the Studio', async ({
+      page,
+      isMobile,
+    }) => {
+      test.skip(isMobile, 'Desktop shows the model switch next to the 3D preview.');
+      // Track live 64×64 textures (the rig's skin texture) separately from any
+      // other texture the renderer may own: mark a texture as a skin when a
+      // 64×64 image is allocated for it, and forget it when it is deleted.
+      await page.addInitScript(() => {
+        const state = globalThis as unknown as { __skinTextures: Set<WebGLTexture> };
+        state.__skinTextures = new Set();
+        const proto = WebGL2RenderingContext.prototype;
+        const bound = new WeakMap<WebGL2RenderingContext, WebGLTexture | null>();
+        // eslint-disable-next-line @typescript-eslint/unbound-method -- re-bound with apply
+        const bind = proto.bindTexture;
+        proto.bindTexture = function (this: WebGL2RenderingContext, target, texture) {
+          bound.set(this, texture);
+          bind.apply(this, [target, texture]);
+        };
+        const mark = (gl: WebGL2RenderingContext, width: unknown, height: unknown) => {
+          const texture = bound.get(gl);
+          if (texture && width === 64 && height === 64) state.__skinTextures.add(texture);
+        };
+        // eslint-disable-next-line @typescript-eslint/unbound-method -- re-bound with apply
+        const storage = proto.texStorage2D;
+        proto.texStorage2D = function (this: WebGL2RenderingContext, ...args) {
+          mark(this, args[3], args[4]);
+          storage.apply(this, args);
+        };
+        // eslint-disable-next-line @typescript-eslint/unbound-method -- re-bound with apply
+        const image = proto.texImage2D as (...a: unknown[]) => void;
+        proto.texImage2D = function (this: WebGL2RenderingContext, ...args: unknown[]) {
+          mark(this, args[3], args[4]);
+          image.apply(this, args);
+        };
+        // eslint-disable-next-line @typescript-eslint/unbound-method -- re-bound with apply
+        const remove = proto.deleteTexture;
+        proto.deleteTexture = function (this: WebGL2RenderingContext, texture) {
+          if (texture) state.__skinTextures.delete(texture);
+          remove.apply(this, [texture]);
+        };
+      });
+      const liveSkinTextures = () =>
+        page.evaluate(
+          () =>
+            (globalThis as unknown as { __skinTextures: Set<WebGLTexture> }).__skinTextures.size,
+        );
+
+      await page.goto('/editor');
+      await expect(
+        page.getByRole('img', { name: '3D preview of your skin' }).locator('canvas'),
+      ).toBeVisible();
+      await expect.poll(liveSkinTextures).toBe(1);
+
+      // Each switch rebuilds the rig: a new texture replaces the old one.
+      for (let i = 0; i < 3; i++) {
+        await page.getByRole('radio', { name: 'Alex (slim)' }).click();
+        await page.getByRole('radio', { name: 'Steve (classic)' }).click();
+      }
+      await page.getByRole('radio', { name: 'Alex (slim)' }).click();
+      await page.waitForTimeout(300);
+      await expect.poll(liveSkinTextures).toBe(1);
+
+      // Leaving the Studio unmounts the viewer and frees the rig's texture.
+      await page.getByRole('link', { name: 'Settings', exact: true }).first().click();
+      await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible();
+      await expect.poll(liveSkinTextures).toBe(0);
+    });
+
     test('lighting presets and intensity apply; flat disables intensity', async ({
       page,
       isMobile,

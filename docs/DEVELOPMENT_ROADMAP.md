@@ -136,7 +136,9 @@ Live updates from the document store (every stroke, undo and redo). Owner's
 geometry (hips ±1.9, slim shoulders 0.5 lower — verify), Java transparency
 rules, lighting presets + intensity, flat exact-color mode, 360° turntable;
 geometry and every face's UVs tested in Node, face colors tested in real
-WebGL. Remaining: wireframe, texture inspection, screenshots.*
+WebGL. Resource release tested (every geometry, material and texture; no
+skin texture left after model switches or leaving the Studio). Remaining:
+wireframe, texture inspection, screenshots, animated camera transitions.*
 - PlayerModel with engine-derived UVs; classic/slim; outer-layer toggle;
   per-part visibility; correct transparency; instant updates from the store.
 - Orbit rotate/zoom/pan, front/back/side/top/reset presets, fullscreen,
