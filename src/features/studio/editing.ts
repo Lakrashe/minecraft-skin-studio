@@ -3,18 +3,12 @@
  * become engine commands on the document store; loading a starting skin and
  * switching the model are undoable commands too.
  */
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo } from 'react';
 import type { SampleId } from '@/content';
 import type { Texel } from '@/editor2d';
-import {
-  blankDocument,
-  editMask,
-  pickColor,
-  Stroke,
-  type SkinMask,
-  type SkinModel,
-} from '@/engine';
+import { blankDocument, editMask, pickColor, type SkinMask, type SkinModel } from '@/engine';
 import { sampleDocument, studioDocument, useStudioDocument } from './document';
+import { beginStroke, cancelStroke, endStroke, moveStroke } from './stroke-controller';
 import { editableLayers, isDrawingTool, useStudio } from './studio-store';
 
 /** Where tools may paint: the selected body part on the editable, visible layers. */
@@ -39,9 +33,10 @@ export interface StrokeHandlers {
   readonly onActivate: (texel: Texel) => void;
 }
 
-/** Pointer strokes → live preview → one undoable command per stroke. */
+/** Pointer strokes → live preview → one undoable command per stroke (see stroke-controller). */
 export function useStrokeHandlers(): StrokeHandlers {
-  const stroke = useRef<Stroke | null>(null);
+  // Leaving the Studio mid-stroke must not leave its preview in the shared document.
+  useEffect(() => cancelStroke, []);
 
   return useMemo(() => {
     const start = (texel: Texel) => {
@@ -53,9 +48,8 @@ export function useStrokeHandlers(): StrokeHandlers {
         return;
       }
       if (!isDrawingTool(ui.tool)) return;
-      stroke.current = new Stroke(
+      beginStroke(
         ui.tool,
-        doc.pixels,
         {
           color: ui.color,
           mask: editMask(
@@ -69,34 +63,15 @@ export function useStrokeHandlers(): StrokeHandlers {
         },
         texel,
       );
-      studioDocument.setPreview(stroke.current.changes);
-    };
-    const move = (texel: Texel) => {
-      const current = stroke.current;
-      if (!current) return;
-      current.move(texel);
-      studioDocument.setPreview(current.changes);
-    };
-    const end = () => {
-      const current = stroke.current;
-      stroke.current = null;
-      if (!current) return;
-      const command = current.finish();
-      if (command) studioDocument.dispatch(command);
-      else studioDocument.setPreview(null);
-    };
-    const cancel = () => {
-      stroke.current = null;
-      studioDocument.setPreview(null);
     };
     return {
       onStrokeStart: start,
-      onStrokeMove: move,
-      onStrokeEnd: end,
-      onStrokeCancel: cancel,
+      onStrokeMove: moveStroke,
+      onStrokeEnd: endStroke,
+      onStrokeCancel: cancelStroke,
       onActivate: (texel) => {
         start(texel);
-        end();
+        endStroke();
       },
     };
   }, []);
@@ -104,6 +79,7 @@ export function useStrokeHandlers(): StrokeHandlers {
 
 /** Replaces the skin with a sample or a blank skin (undoable). */
 export function loadSource(source: SampleId | 'blank'): void {
+  cancelStroke();
   const before = studioDocument.document;
   const after = source === 'blank' ? blankDocument(before.model) : sampleDocument(source);
   studioDocument.dispatch({ kind: 'replace', before, after });
@@ -112,15 +88,19 @@ export function loadSource(source: SampleId | 'blank'): void {
 
 /** Switches the arm model (texture layout) without moving pixels (undoable). */
 export function setModel(model: SkinModel): void {
+  cancelStroke();
   const before = studioDocument.document.model;
   if (before === model) return;
   studioDocument.dispatch({ kind: 'setModel', before, after: model });
 }
 
+/** Undo/redo first cancel a stroke in progress (its pointer may still be down). */
 export function undo(): void {
+  cancelStroke();
   studioDocument.undo();
 }
 
 export function redo(): void {
+  cancelStroke();
   studioDocument.redo();
 }

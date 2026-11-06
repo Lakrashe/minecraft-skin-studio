@@ -272,6 +272,9 @@ export function TextureView({
       endStroke(true);
       return;
     }
+    // Pointer interaction moves keyboard focus here (preventDefault below would
+    // otherwise keep it in e.g. the HEX field, swallowing undo and tool keys).
+    event.currentTarget.focus({ preventScroll: true });
     const { px, py } = local(event);
     onInspect(screenToTexel(px, py, zoom));
     if (event.button !== 0 || panning || !onStrokeStart || gesture.current) return;

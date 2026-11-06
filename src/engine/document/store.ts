@@ -32,6 +32,26 @@ export interface DocumentStoreOptions {
   readonly historyLimit?: number;
 }
 
+/** Whether `command` was made for `doc` (its "before" state is the current one). */
+export function commandMatches(doc: SkinDocument, command: Command): boolean {
+  switch (command.kind) {
+    case 'pixels': {
+      const { rect, before } = command.patch;
+      for (let y = 0; y < rect.h; y++) {
+        const row = ((rect.y + y) * doc.pixels.width + rect.x) * 4;
+        for (let i = 0; i < rect.w * 4; i++) {
+          if (doc.pixels.data[row + i] !== before[y * rect.w * 4 + i]) return false;
+        }
+      }
+      return true;
+    }
+    case 'setModel':
+      return doc.model === command.before;
+    case 'replace':
+      return doc === command.before;
+  }
+}
+
 export class DocumentStore {
   private doc: SkinDocument;
   private preview: PixelChanges | null = null;
@@ -62,14 +82,21 @@ export class DocumentStore {
     return this.doc;
   }
 
-  /** Applies a command and records it for undo. Clears the redo stack. */
-  dispatch(command: Command): void {
+  /**
+   * Applies a command and records it for undo; clears the redo stack.
+   * Refuses (returns `false`, changes nothing) a command whose "before" state
+   * is not the current document — e.g. a stroke started before an undo — so
+   * history always describes the real sequence of edits.
+   */
+  dispatch(command: Command): boolean {
+    if (!commandMatches(this.doc, command)) return false;
     this.doc = applyCommand(this.doc, command);
     this.preview = null;
     this.undoStack.push(command);
     if (this.undoStack.length > this.historyLimit) this.undoStack.shift();
     this.redoStack.length = 0;
     this.changed();
+    return true;
   }
 
   undo(): boolean {

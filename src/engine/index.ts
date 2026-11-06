@@ -60,7 +60,12 @@ export {
   type PixelPatch,
   type SkinDocument,
 } from './document/document';
-export { DocumentStore, type DocumentStoreOptions, type StoreSnapshot } from './document/store';
+export {
+  DocumentStore,
+  commandMatches,
+  type DocumentStoreOptions,
+  type StoreSnapshot,
+} from './document/store';
 export {
   DRAWING_TOOLS,
   Stroke,

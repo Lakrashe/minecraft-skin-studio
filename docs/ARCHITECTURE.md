@@ -5,13 +5,13 @@ The rules it implements are in `PROJECT_RULES.md` §1. Build order is in
 `docs/DEVELOPMENT_ROADMAP.md`.
 
 Status: **approved design** (decisions D1, D3–D5 approved 2026-11-05).
-Implemented so far: the Phase 1 foundation (milestones 1.1–1.2) and the
-homepage + Studio viewer step — tooling, boundaries, design system, app shell,
-settings, i18n; engine types, `PixelBuffer` and UV region tables; original
-sample characters (`content/samples`); the 3D player model with idle/walk
-animation; read-only 2D texture and flat views; the Studio layout in viewer
-mode (§5a). Document model, commands/history, tools and persistence below are
-design, not yet implementation. Decisions are summarized in §12.
+Implemented so far (§5a): the Phase 1 foundation (milestones 1.1–1.2); the
+homepage and 3D viewer; and the 2D skin editor — a single-texture document
+model, pixel/model/replace commands with bounded undo/redo, edit masks, mirror
+maps, drawing tools, the editable 2D canvas with zoom/pan/pinch, color picker
+and saved palettes. Still design only: editor layers, transactions,
+serialization, persistence (saving projects), PNG import/export, selection
+tools and everything in later phases. Decisions are summarized in §12.
 
 ---
 
@@ -334,7 +334,19 @@ interface DocumentStore {
   The live stroke is shown via `setPreview`; `finish()` gives one command.
   Bucket fill is 4-connected, exact-RGBA, limited to the start texel's face.
 - Edit mask = selected body part × editable layers ("Paint on") minus hidden
-  layers; unused texture areas are never editable.
+  layers; unused texture areas are never editable. Mirror drawing writes a
+  mirrored texel only if it is inside the mask too: with one limb selected,
+  mirroring does not touch the other limb (select Full skin to mirror across).
+- **Stroke lifecycle** (`features/studio/stroke-controller.ts`): at most one
+  live stroke, drawn against the document it started on. Undo, redo, loading
+  a skin, switching the model, leaving the Studio and multi-touch gestures
+  cancel it. As a second line of defense `DocumentStore.dispatch` refuses any
+  command whose "before" state is not the current document
+  (`commandMatches`), so a stale stroke can never enter history.
+- Live previews are published only when a pointer move changes the stroke's
+  pixels. `PlayerModel` keeps one `DataTexture` and one pair of materials and
+  copies each new texture into it (`needsUpdate`), so drawing does not
+  allocate GPU resources per change.
 - The Studio (`features/studio`) keeps one store per browser tab
   (`document.ts`); the 2D view, 3D preview, flat fallback and status bar all
   read its snapshot. UI-only state (tool, color, view options) is in
@@ -355,12 +367,14 @@ interface DocumentStore {
   `PlayerModel` uses an sRGB nearest-filtered `DataTexture`, an opaque inner
   material and an alpha-tested, double-sided outer shell (+0.5 head, +0.25 rest).
   `PlayerViewer` adds Drei `OrbitControls` and camera presets.
-- `editor2d/TextureView`: read-only canvas view (checkerboard, grid, face
-  outlines, focus dimming, pointer and arrow-key pixel inspection);
+- `editor2d/TextureView`: the canvas view, read-only in this step and the
+  drawing surface since the editor step (checkerboard, grid, face outlines,
+  dimming, pointer and arrow-key pixel inspection);
   `FlatPreview`/`composeFlatView` for thumbnails and the no-WebGL fallback.
 - `features/studio`: Studio layout (left view panel, center texture, right 3D,
   status bar; tabs on phones). `useStudio` (Zustand) holds view state only;
-  pixels come from the selected sample until the document store exists.
+  in this step pixels came from the selected sample (now from the document
+  store, see Editor above).
   Panels subscribe to the fields they use (`useShallow`), and pointer moves
   within one texel do not update the store. `TextureView` draws on two
   canvases: the base (texture, grid, outlines) redraws only when view options

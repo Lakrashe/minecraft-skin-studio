@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { BUILT_IN_PALETTES } from '@/content';
 import { useT } from '@/i18n';
@@ -29,24 +29,34 @@ function swatchStyle(hex: string) {
   return { background: `linear-gradient(${hex}, ${hex}), ${checker}` };
 }
 
-/** HEX field: edits locally, applies valid colors, explains invalid ones. */
+/**
+ * HEX field. While it has focus, what you type is never rewritten: complete
+ * values apply as you type (so `#123` previews #112233 on the way to
+ * `#123456`), and the text is normalized only on Enter or when leaving the
+ * field. Color changes made elsewhere (picker, palette, eyedropper) update it
+ * when it is not being edited.
+ */
 function HexField() {
   const t = useT();
   const color = useStudio((s) => s.color);
   const setColor = useStudio((s) => s.setColor);
   const [text, setText] = useState(() => formatHexColor(color));
   const [invalid, setInvalid] = useState(false);
+  const editing = useRef(false);
 
-  // Follow color changes made elsewhere (picker, palette, eyedropper).
   useEffect(() => {
+    if (editing.current) return;
     setText(formatHexColor(color));
     setInvalid(false);
   }, [color]);
 
-  const apply = (value: string) => {
+  /** Enter/blur: apply and normalize, or explain why the value is not a color. */
+  const commit = (value: string) => {
     const parsed = parseHexColor(value);
     setInvalid(parsed === null);
-    if (parsed) setColor(parsed);
+    if (!parsed) return;
+    setColor(parsed);
+    setText(formatHexColor(parsed));
   };
 
   return (
@@ -67,11 +77,15 @@ function HexField() {
           setColor(parsed);
         }
       }}
+      onFocus={() => {
+        editing.current = true;
+      }}
       onBlur={(event) => {
-        apply(event.target.value);
+        editing.current = false;
+        commit(event.target.value);
       }}
       onKeyDown={(event) => {
-        if (event.key === 'Enter') apply(event.currentTarget.value);
+        if (event.key === 'Enter') commit(event.currentTarget.value);
       }}
     />
   );

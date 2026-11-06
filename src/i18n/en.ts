@@ -168,7 +168,8 @@ export const en = {
       pan: 'Drag to move around the zoomed texture.',
     },
     mirror: 'Mirror drawing',
-    mirrorHint: 'Also paints the matching pixel on the other side (left ↔ right).',
+    mirrorHint:
+      'Also paints the matching pixel on the other side (left ↔ right) when that side is selected too.',
     rectFilled: 'Filled rectangle',
     color: 'Color',
     currentColor: 'Current color {hex}',

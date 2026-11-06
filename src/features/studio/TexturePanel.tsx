@@ -15,6 +15,7 @@ import { IconButton } from '@/ui';
 import { useStudioDocument } from './document';
 import { useEditMask, useStrokeHandlers } from './editing';
 import { isTypingTarget } from './shortcuts';
+import { setGesture } from './stroke-controller';
 import { useStudio, type ToolId } from './studio-store';
 import { ToolButtons } from './ToolsPanel';
 
@@ -159,10 +160,19 @@ export function TexturePanel() {
     };
   }, [setZoom]);
 
-  // Hold Space to pan with the pointer.
+  // Hold Space to pan — only for the workspace: when focus is in it (the
+  // texture), or nothing is focused and the pointer is over it. Buttons,
+  // switches, fields and dialogs keep their own Space behavior.
+  const hovering = useRef(false);
   useEffect(() => {
     const down = (event: KeyboardEvent) => {
-      if (event.code !== 'Space' || isTypingTarget(event.target)) return;
+      if (event.code !== 'Space' || event.defaultPrevented || isTypingTarget(event.target)) return;
+      if (window.document.querySelector('dialog[open]')) return;
+      const target = event.target;
+      const inWorkspace = target instanceof Node && scrollRef.current?.contains(target) === true;
+      const nothingFocused =
+        target === window.document.body || target === window.document.documentElement;
+      if (!inWorkspace && !(nothingFocused && hovering.current)) return;
       event.preventDefault();
       setSpaceHeld(true);
     };
@@ -213,6 +223,9 @@ export function TexturePanel() {
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (event.pointerType === 'touch') {
       touches.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      // A second finger anywhere in the workspace (texture or padding) makes
+      // this a gesture: cancel the stroke the first finger started.
+      if (touches.current.size >= 2) setGesture(true);
       const f = touches.current.size === 2 ? fingers() : null;
       if (f) {
         pan.current = null;
@@ -242,6 +255,8 @@ export function TexturePanel() {
   const onPointerEnd = (event: PointerEvent<HTMLDivElement>) => {
     touches.current.delete(event.pointerId);
     if (touches.current.size < 2) pinch.current = null;
+    // Drawing is allowed again only once every finger has lifted.
+    if (touches.current.size === 0) setGesture(false);
     onPanEnd();
   };
 
@@ -292,6 +307,12 @@ export function TexturePanel() {
       <div
         ref={scrollRef}
         data-panning={panning || undefined}
+        onPointerEnter={() => {
+          hovering.current = true;
+        }}
+        onPointerLeave={() => {
+          hovering.current = false;
+        }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerEnd}

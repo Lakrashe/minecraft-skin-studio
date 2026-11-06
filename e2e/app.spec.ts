@@ -394,6 +394,160 @@ test.describe('studio', () => {
     await expect(labels).toHaveAttribute('data-labels', '0');
   });
 
+  test.describe('audit regressions', () => {
+    test('undo while the mouse is still down keeps history exact (P1)', async ({
+      page,
+      isMobile,
+    }) => {
+      test.skip(isMobile, 'Mouse input; the engine and component tests cover the logic.');
+      await page.goto('/editor');
+      const original = (await (await colorAt(page, 8, 8)).textContent()) ?? '';
+      const a = await texelPoint(page, 8, 8);
+      await page.mouse.click(a.x, a.y); // commit a green pixel at (8,8)
+      await expect(await colorAt(page, 8, 8)).toContainText('#3fa34d');
+
+      await page.getByLabel('HEX').fill('#0000ff');
+      await page.getByLabel('HEX').press('Enter');
+      const b = await texelPoint(page, 9, 8);
+      await page.mouse.move(b.x, b.y);
+      await page.mouse.down(); // blue stroke over (9,8)…
+      await page.mouse.move(a.x, a.y, { steps: 2 }); // …and (8,8)
+      await page.keyboard.press('Control+z'); // undo the green pixel mid-stroke
+      await page.mouse.up();
+
+      await expect(await colorAt(page, 8, 8)).toHaveText(original);
+      await expect(page.getByRole('button', { name: 'Undo' })).toBeDisabled();
+      await page.keyboard.press('Control+Shift+z');
+      await expect(await colorAt(page, 8, 8)).toContainText('#3fa34d');
+    });
+
+    test('typing a HEX color, painting, then shortcuts all work (P2)', async ({
+      page,
+      isMobile,
+    }) => {
+      await page.goto('/editor');
+      if (isMobile) await page.getByRole('radio', { name: 'Tools', exact: true }).click();
+      const hex = page.getByLabel('HEX');
+      await hex.click();
+      await hex.press('Control+a');
+      await hex.pressSequentially('#123456');
+      await expect(hex).toHaveValue('#123456');
+      if (isMobile) await page.getByRole('radio', { name: '2D texture' }).click();
+
+      // No programmatic focus: a normal click on the texture.
+      const p = await texelPoint(page, 12, 12);
+      await page.mouse.click(p.x, p.y);
+      await expect(await colorAt(page, 12, 12)).toContainText('#123456');
+      await page.keyboard.press('Control+z');
+      await expect(await colorAt(page, 12, 12)).not.toContainText('#123456');
+      await page.keyboard.press('e');
+      if (isMobile) {
+        const strip = page.getByRole('toolbar', { name: 'Tools' });
+        await expect(strip.getByRole('button', { name: 'Eraser' })).toHaveAttribute(
+          'aria-pressed',
+          'true',
+        );
+      } else {
+        await expect(page.getByRole('button', { name: 'Eraser' })).toHaveAttribute(
+          'aria-pressed',
+          'true',
+        );
+      }
+    });
+
+    test('leaving mid-stroke leaves no phantom pixels (P2)', async ({ page, isMobile }) => {
+      test.skip(isMobile, 'Uses the desktop header link.');
+      await page.goto('/editor');
+      await page.getByLabel('Start from').selectOption('blank');
+      const p = await texelPoint(page, 10, 10);
+      await page.mouse.move(p.x, p.y);
+      await page.mouse.down();
+      // Navigate with the app's own link while the button is still down.
+      await page.evaluate(() => {
+        document.querySelector<HTMLAnchorElement>('header a[href="/settings"]')?.click();
+      });
+      await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible();
+      await page.mouse.up();
+      await page.getByRole('link', { name: 'Studio', exact: true }).first().click();
+      await expect(await colorAt(page, 10, 10)).toContainText('Transparent');
+      await expect(page.getByRole('button', { name: 'Undo' })).toBeEnabled(); // only the "blank" load
+    });
+
+    test('a pinch with the second finger beside the texture paints nothing (P2)', async ({
+      page,
+      isMobile,
+    }) => {
+      test.skip(!isMobile, 'Touch gestures run in the phone project.');
+      await page.goto('/editor');
+      const texture = page.getByRole('img', { name: /64×64 skin texture/ });
+      await expect(texture).toBeVisible();
+      const box = await texture.boundingBox();
+      if (!box) throw new Error('texture not visible');
+      const first = { x: box.x + box.width * 0.2, y: box.y + box.height * 0.2 };
+      const second = { x: box.x - 8, y: box.y + box.height * 0.2 }; // workspace padding
+      const cdp = await page.context().newCDPSession(page);
+      const send = (
+        type: 'touchStart' | 'touchMove' | 'touchEnd',
+        points: { x: number; y: number; id: number }[],
+      ) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points });
+      await send('touchStart', [{ ...first, id: 1 }]);
+      await send('touchStart', [
+        { ...first, id: 1 },
+        { ...second, id: 2 },
+      ]);
+      for (const d of [10, 20, 30, 40]) {
+        await send('touchMove', [
+          { x: first.x + d, y: first.y, id: 1 },
+          { x: second.x - d, y: second.y, id: 2 },
+        ]);
+      }
+      await send('touchEnd', []);
+      await expect(page.getByRole('button', { name: 'Undo' })).toBeDisabled();
+    });
+
+    test('Space still toggles a focused switch (P3)', async ({ page, isMobile }) => {
+      await page.goto('/editor');
+      if (isMobile) await page.getByRole('radio', { name: 'Tools', exact: true }).click();
+      const mirror = page.getByRole('switch', { name: 'Mirror drawing' });
+      await mirror.focus();
+      await page.keyboard.press('Space');
+      await expect(mirror).toHaveAttribute('aria-checked', 'true');
+    });
+
+    test('moving within one texel does not recreate GPU textures (P3)', async ({
+      page,
+      isMobile,
+    }) => {
+      test.skip(isMobile, 'Desktop shows the 2D texture and the 3D preview side by side.');
+      await page.addInitScript(() => {
+        const counter = globalThis as unknown as { __textures: number };
+        counter.__textures = 0;
+        const proto = WebGL2RenderingContext.prototype;
+        // eslint-disable-next-line @typescript-eslint/unbound-method -- re-bound with apply
+        const create = proto.createTexture;
+        proto.createTexture = function (this: WebGL2RenderingContext) {
+          counter.__textures++;
+          return create.apply(this);
+        };
+      });
+      await page.goto('/editor');
+      const preview = page.getByRole('img', { name: '3D preview of your skin' });
+      await expect(preview.locator('canvas')).toBeVisible();
+      const p = await texelPoint(page, 10, 10);
+      await page.mouse.move(p.x, p.y);
+      await page.mouse.down();
+      await page.waitForTimeout(300);
+      const count = () =>
+        page.evaluate(() => (globalThis as unknown as { __textures: number }).__textures);
+      const before = await count();
+      for (let i = 0; i < 20; i++) await page.mouse.move(p.x + (i % 2), p.y + (i % 2));
+      await page.waitForTimeout(300);
+      expect(await count()).toBe(before);
+      await page.mouse.up();
+      await expect(await colorAt(page, 10, 10)).toContainText('#3fa34d');
+    });
+  });
+
   test('phones keep the tools above the texture', async ({ page, isMobile }) => {
     test.skip(!isMobile, 'Phone layout only.');
     await page.goto('/editor');

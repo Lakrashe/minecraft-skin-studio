@@ -1,5 +1,5 @@
 import { useFrame } from '@react-three/fiber';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import {
   BoxGeometry,
   DataTexture,
@@ -11,7 +11,7 @@ import {
   SRGBColorSpace,
   type Group,
 } from 'three';
-import type { BodyPart, PixelBuffer, SkinModel } from '@/engine';
+import { SKIN_HEIGHT, SKIN_WIDTH, type BodyPart, type PixelBuffer, type SkinModel } from '@/engine';
 import { sampleAnimation, type AnimationId } from '@/rig';
 import { partUvs, playerLayout } from './player-geometry';
 
@@ -26,9 +26,10 @@ export interface PlayerModelProps {
   readonly paused?: boolean;
 }
 
-function createSkinTexture(skin: PixelBuffer): DataTexture {
-  const data = new Uint8Array(skin.data.buffer, skin.data.byteOffset, skin.data.byteLength);
-  const texture = new DataTexture(data, skin.width, skin.height, RGBAFormat);
+/** One reusable 64×64 texture with its own pixel copy; new skins are copied in. */
+function createSkinTexture(): DataTexture {
+  const data = new Uint8Array(SKIN_WIDTH * SKIN_HEIGHT * 4);
+  const texture = new DataTexture(data, SKIN_WIDTH, SKIN_HEIGHT, RGBAFormat);
   texture.magFilter = NearestFilter;
   texture.minFilter = NearestFilter;
   texture.generateMipmaps = false;
@@ -66,7 +67,14 @@ export function PlayerModel({
   animation = 'idle',
   paused = false,
 }: PlayerModelProps) {
-  const texture = useMemo(() => createSkinTexture(skin), [skin]);
+  // One texture and one pair of materials for the model's lifetime: each new
+  // skin (every stroke, undo, redo) is copied into the texture and re-uploaded,
+  // instead of allocating GPU resources per change (ARCHITECTURE §6).
+  const texture = useMemo(() => createSkinTexture(), []);
+  useLayoutEffect(() => {
+    (texture.image.data as Uint8Array).set(skin.data.subarray(0, SKIN_WIDTH * SKIN_HEIGHT * 4));
+    texture.needsUpdate = true;
+  }, [texture, skin]);
   useEffect(
     () => () => {
       texture.dispose();

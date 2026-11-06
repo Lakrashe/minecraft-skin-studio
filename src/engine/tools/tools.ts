@@ -56,25 +56,40 @@ export class Stroke {
     return this.changeMap;
   }
 
-  /** Continues the stroke to `p` (pencil/eraser draw a connected line). */
-  move(p: Point): void {
+  /**
+   * Continues the stroke to `p` (pencil/eraser draw a connected line; line
+   * and rectangle redraw from the start). Returns whether `changes` changed,
+   * so callers can skip redundant previews (e.g. moves within one texel).
+   */
+  move(p: Point): boolean {
+    let changed = false;
     switch (this.tool) {
       case 'pencil':
-      case 'eraser':
+      case 'eraser': {
+        const before = this.changeMap.size;
         this.plotAll(linePoints(this.last, p));
+        changed = this.changeMap.size !== before;
         break;
+      }
       case 'line':
+      case 'rect': {
+        const previous = new Set(this.changeMap.keys());
         this.changeMap.clear();
-        this.plotAll(linePoints(this.start, p));
+        this.plotAll(
+          this.tool === 'line'
+            ? linePoints(this.start, p)
+            : rectPoints(this.start, p, this.options.filled ?? false),
+        );
+        changed =
+          previous.size !== this.changeMap.size ||
+          [...this.changeMap.keys()].some((i) => !previous.has(i));
         break;
-      case 'rect':
-        this.changeMap.clear();
-        this.plotAll(rectPoints(this.start, p, this.options.filled ?? false));
-        break;
+      }
       case 'bucket':
         break;
     }
     this.last = p;
+    return changed;
   }
 
   /** The command for the whole stroke, or `null` when it changes nothing. */
@@ -87,12 +102,17 @@ export class Stroke {
     return this.options.mask.bits[index] === 1;
   }
 
+  /**
+   * Writes `index` and, with mirror drawing, its mirror texel. Both must be
+   * inside the edit mask: mirroring never paints a part or layer that is not
+   * editable (ARCHITECTURE §4.6, invariant 8).
+   */
   private write(index: number): void {
     if (!this.allowed(index)) return;
     this.changeMap.set(index, this.color);
     if (this.options.mirror) {
       const m = mirrorMap(this.options.model)[index] ?? -1;
-      if (m >= 0) this.changeMap.set(m, this.color);
+      if (m >= 0 && this.allowed(m)) this.changeMap.set(m, this.color);
     }
   }
 

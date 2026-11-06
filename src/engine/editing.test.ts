@@ -10,11 +10,11 @@ import {
   createPatch,
   invertCommand,
 } from './document/document';
-import { DocumentStore } from './document/store';
+import { commandMatches, DocumentStore } from './document/store';
 import { faceRect, regionAt } from './format/regions';
 import { editMask, maskCount, maskHas, regionMask } from './mask/mask';
 import { createPixelBuffer, fillRect, getPixel, setPixel } from './model/pixel-buffer';
-import { SKIN_MODELS, SKIN_WIDTH, type Rgba } from './model/types';
+import { BODY_PARTS, SKIN_LAYERS, SKIN_MODELS, SKIN_WIDTH, type Rgba } from './model/types';
 import { floodFillIndices, linePoints, rectPoints } from './raster/shapes';
 import { MIRROR_PART, mirrorFacePosition, mirrorMap, mirrorPoint } from './symmetry/mirror';
 import { pickColor, Stroke, type ToolOptions } from './tools/tools';
@@ -421,5 +421,96 @@ describe('DocumentStore (ARCHITECTURE §4.6)', () => {
     expect(listener).toHaveBeenCalledOnce();
     expect(store.document.model).toBe('slim');
     expect(store.getSnapshot().canUndo).toBe(false);
+  });
+});
+
+describe('audit regressions', () => {
+  it('a stroke started before an undo is refused, keeping history exact (P1)', () => {
+    const store = new DocumentStore(blankDocument());
+    const red = new Stroke('pencil', store.document.pixels, options(), { x: 8, y: 8 }).finish();
+    if (!red) throw new Error('expected a command');
+    store.dispatch(red);
+    // A blue stroke starts on the red document and crosses (8,8)…
+    const blue = new Stroke('pencil', store.document.pixels, options({ color: BLUE }), {
+      x: 9,
+      y: 8,
+    });
+    blue.move({ x: 8, y: 8 });
+    // …the user undoes the red pixel while still drawing…
+    store.undo();
+    // …and releases: the stale command must not be recorded.
+    const stale = blue.finish();
+    if (!stale) throw new Error('expected a command');
+    expect(store.dispatch(stale)).toBe(false);
+    expect(getPixel(store.document.pixels, 8, 8)).toEqual(CLEAR);
+    expect(getPixel(store.document.pixels, 9, 8)).toEqual(CLEAR);
+    expect(store.historySize).toBe(0);
+    expect(store.getSnapshot().canRedo).toBe(true);
+  });
+
+  it('refuses stale model and replace commands', () => {
+    const doc = blankDocument('classic');
+    expect(commandMatches(doc, { kind: 'setModel', before: 'slim', after: 'classic' })).toBe(false);
+    expect(commandMatches(doc, { kind: 'replace', before: blankDocument(), after: doc })).toBe(
+      false,
+    );
+    expect(commandMatches(doc, { kind: 'replace', before: doc, after: blankDocument() })).toBe(
+      true,
+    );
+  });
+
+  it.each(SKIN_MODELS)(
+    '%s: mirror drawing never writes outside the edit mask, for every part and layer (P2)',
+    (model) => {
+      for (const part of BODY_PARTS) {
+        for (const layer of SKIN_LAYERS) {
+          const mask = editMask(model, part, [layer]);
+          for (let i = 0; i < mask.bits.length; i++) {
+            if (mask.bits[i] !== 1) continue;
+            const stroke = new Stroke(
+              'pencil',
+              blankDocument(model).pixels,
+              options({ mask, model, mirror: true }),
+              { x: i % 64, y: Math.floor(i / 64) },
+            );
+            for (const index of stroke.changes.keys()) expect(mask.bits[index]).toBe(1);
+          }
+        }
+      }
+    },
+  );
+
+  it('mirror drawing still mirrors when both sides are editable', () => {
+    const both = editMask('classic', 'all', ['inner']);
+    const right = editMask('classic', 'rightArm', ['inner']);
+    const p = { x: 44, y: 20 };
+    const mirrored = 52 * 64 + 39;
+    expect([
+      ...new Stroke(
+        'pencil',
+        blankDocument().pixels,
+        options({ mask: both, mirror: true }),
+        p,
+      ).changes.keys(),
+    ]).toContain(mirrored);
+    expect([
+      ...new Stroke(
+        'pencil',
+        blankDocument().pixels,
+        options({ mask: right, mirror: true }),
+        p,
+      ).changes.keys(),
+    ]).not.toContain(mirrored);
+  });
+
+  it('move reports whether the stroke changed (P3: no redundant previews)', () => {
+    const pencil = new Stroke('pencil', blankDocument().pixels, options(), { x: 8, y: 8 });
+    expect(pencil.move({ x: 8, y: 8 })).toBe(false);
+    expect(pencil.move({ x: 9, y: 8 })).toBe(true);
+    expect(pencil.move({ x: 9, y: 8 })).toBe(false);
+    const line = new Stroke('line', blankDocument().pixels, options(), { x: 8, y: 8 });
+    expect(line.move({ x: 12, y: 8 })).toBe(true);
+    expect(line.move({ x: 12, y: 8 })).toBe(false);
+    expect(line.move({ x: 11, y: 8 })).toBe(true);
   });
 });

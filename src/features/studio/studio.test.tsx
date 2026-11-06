@@ -3,11 +3,12 @@ import { Profiler } from 'react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { sampleSkin } from '@/content';
-import { getPixel } from '@/engine';
+import { editMask, getPixel } from '@/engine';
 import { I18nProvider } from '@/i18n';
 import { usePalettes } from '@/state';
 import { resetStudioDocument, studioDocument } from './document';
-import { loadSource, setModel } from './editing';
+import { loadSource, redo, setModel, undo } from './editing';
+import { beginStroke, endStroke, moveStroke, setGesture } from './stroke-controller';
 import { StudioPage } from './StudioPage';
 import { editableLayers, effectiveAnimation, INITIAL_COLOR, useStudio } from './studio-store';
 import { ViewPanel } from './ViewPanel';
@@ -22,6 +23,17 @@ function renderStudio(url = '/editor') {
     </I18nProvider>,
   );
   return router;
+}
+
+function renderStudioWithUnmount() {
+  const router = createMemoryRouter([{ path: '/editor', Component: StudioPage }], {
+    initialEntries: ['/editor'],
+  });
+  return render(
+    <I18nProvider language="en">
+      <RouterProvider router={router} />
+    </I18nProvider>,
+  );
 }
 
 const texture = () => screen.getByRole('img', { name: /64×64 skin texture/ });
@@ -258,5 +270,120 @@ describe('StudioPage', () => {
     const status = screen.getAllByRole('status').find((el) => el.textContent.includes('Pixel'));
     expect(status?.textContent).toContain('Pixel 8, 8');
     expect(status?.textContent).toContain('Head · Front · Inner');
+  });
+});
+
+describe('stroke lifecycle (audit)', () => {
+  const opts = (color = INITIAL_COLOR) => ({
+    color,
+    mask: editMask('classic', 'all', ['inner', 'outer']),
+    model: 'classic' as const,
+    mirror: false,
+  });
+  const BLUE = { r: 0, g: 0, b: 255, a: 255 };
+
+  it('undo while the pointer is still down cancels the stroke; history stays exact (P1)', () => {
+    act(() => {
+      loadSource('blank');
+      beginStroke('pencil', opts(), { x: 8, y: 8 });
+      endStroke();
+      beginStroke('pencil', opts(BLUE), { x: 9, y: 8 });
+      moveStroke({ x: 8, y: 8 });
+      undo(); // the red pixel goes; the blue stroke is cancelled
+      moveStroke({ x: 7, y: 8 });
+      endStroke(); // pointer released: nothing to commit
+    });
+    expect(pixel(8, 8)?.a).toBe(0);
+    expect(pixel(9, 8)?.a).toBe(0);
+    expect(studioDocument.getSnapshot().texture).toBe(studioDocument.document.pixels);
+    act(() => {
+      redo();
+    });
+    expect(pixel(8, 8)).toEqual(INITIAL_COLOR);
+  });
+
+  it('loading a skin or switching the model mid-stroke cancels the stroke', () => {
+    act(() => {
+      beginStroke('pencil', opts(BLUE), { x: 8, y: 8 });
+      setModel('slim');
+      endStroke();
+    });
+    expect(pixel(8, 8)).not.toEqual(BLUE);
+    act(() => {
+      beginStroke('pencil', opts(BLUE), { x: 8, y: 8 });
+      loadSource('knight');
+      endStroke();
+    });
+    expect(pixel(8, 8)).toEqual(getPixel(sampleSkin('knight'), 8, 8));
+  });
+
+  it('leaving the Studio mid-stroke leaves no preview behind (P2)', () => {
+    const { unmount } = renderStudioWithUnmount();
+    act(() => {
+      beginStroke('pencil', opts(BLUE), { x: 10, y: 10 });
+    });
+    expect(studioDocument.getSnapshot().texture).not.toBe(studioDocument.document.pixels);
+    unmount();
+    expect(studioDocument.getSnapshot().texture).toBe(studioDocument.document.pixels);
+    expect(studioDocument.getSnapshot().canUndo).toBe(false);
+  });
+
+  it('a multi-touch gesture cancels drawing until every finger lifts (P2)', () => {
+    act(() => {
+      beginStroke('pencil', opts(BLUE), { x: 8, y: 8 });
+      setGesture(true);
+      endStroke();
+      beginStroke('pencil', opts(BLUE), { x: 9, y: 8 }); // ignored during the gesture
+      endStroke();
+      setGesture(false);
+    });
+    expect(studioDocument.getSnapshot().canUndo).toBe(false);
+    act(() => {
+      beginStroke('pencil', opts(BLUE), { x: 9, y: 8 });
+      endStroke();
+    });
+    expect(pixel(9, 8)).toEqual(BLUE);
+  });
+});
+
+describe('HEX field (audit P2)', () => {
+  it('typing #123456 one key at a time gives exactly #123456', () => {
+    renderStudio();
+    const field = screen.getByLabelText<HTMLInputElement>('HEX');
+    fireEvent.focus(field);
+    for (const value of ['', '#', '#1', '#12', '#123', '#1234', '#12345', '#123456']) {
+      fireEvent.change(field, { target: { value } });
+      expect(field.value).toBe(value);
+    }
+    expect(useStudio.getState().color).toEqual({ r: 0x12, g: 0x34, b: 0x56, a: 255 });
+    fireEvent.blur(field);
+    expect(field.value).toBe('#123456');
+  });
+
+  it('normalizes shorthand on Enter and follows outside changes when not editing', () => {
+    renderStudio();
+    const field = screen.getByLabelText<HTMLInputElement>('HEX');
+    fireEvent.focus(field);
+    fireEvent.change(field, { target: { value: 'F80' } });
+    fireEvent.keyDown(field, { key: 'Enter' });
+    expect(field.value).toBe('#ff8800');
+    fireEvent.blur(field);
+    act(() => {
+      useStudio.getState().setColor({ r: 1, g: 2, b: 3, a: 128 });
+    });
+    expect(field.value).toBe('#01020380');
+  });
+});
+
+describe('mirror and body part (audit P2)', () => {
+  it('with only the right arm selected, mirror drawing leaves the left arm alone', () => {
+    renderStudio();
+    const panel = screen.getByRole('complementary', { name: 'Tools' });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Right arm' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Mirror drawing' }));
+    const left = pixel(39, 52);
+    clickTexel(44, 20);
+    expect(pixel(44, 20)).toEqual(INITIAL_COLOR);
+    expect(pixel(39, 52)).toEqual(left);
   });
 });

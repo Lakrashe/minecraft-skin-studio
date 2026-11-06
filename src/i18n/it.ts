@@ -165,7 +165,8 @@ export const it: Dictionary = {
       pan: 'Trascina per spostarti nella texture ingrandita.',
     },
     mirror: 'Disegno a specchio',
-    mirrorHint: 'Colora anche il pixel corrispondente dall’altro lato (sinistra ↔ destra).',
+    mirrorHint:
+      'Colora anche il pixel corrispondente dall’altro lato (sinistra ↔ destra) se anche quel lato è selezionato.',
     rectFilled: 'Rettangolo pieno',
     color: 'Colore',
     currentColor: 'Colore attuale {hex}',
