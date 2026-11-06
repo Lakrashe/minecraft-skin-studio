@@ -558,6 +558,143 @@ test.describe('studio', () => {
     });
   });
 
+  test.describe('3D rendering accuracy', () => {
+    /** RGB of the rendered 3D preview at an offset (in model units) from its center. */
+    async function renderedColor(page: Page, unitsRight = 0, unitsUp = 0) {
+      const canvas = page.getByRole('img', { name: '3D preview of your skin' }).locator('canvas');
+      const box = await canvas.boundingBox();
+      if (!box) throw new Error('3D preview not visible');
+      // Camera: 35° vertical field of view, 68 units from the center; faces are ~2 units closer.
+      const pxPerUnit = box.height / (2 * 66 * Math.tan((17.5 * Math.PI) / 180));
+      const x = Math.round(box.width / 2 + unitsRight * pxPerUnit);
+      const y = Math.round(box.height / 2 - unitsUp * pxPerUnit);
+      const png = await canvas.screenshot();
+      // Decode the screenshot in the page (no image library needed in the tests).
+      return page.evaluate(
+        async ({ data, x, y, cssWidth }) => {
+          const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+          const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/png' }));
+          const c = document.createElement('canvas');
+          c.width = bitmap.width;
+          c.height = bitmap.height;
+          const ctx = c.getContext('2d');
+          if (!ctx) return [0, 0, 0];
+          ctx.drawImage(bitmap, 0, 0);
+          // Screenshots are in device pixels: scale the CSS position.
+          const ratio = bitmap.width / cssWidth;
+          const p = ctx.getImageData(Math.round(x * ratio), Math.round(y * ratio), 1, 1).data;
+          return [p[0] ?? 0, p[1] ?? 0, p[2] ?? 0];
+        },
+        { data: png.toString('base64'), x, y, cssWidth: box.width },
+      );
+    }
+
+    /** Waits until the pixel matches `expected` (±10 per channel); reports what was seen. */
+    async function expectColor(page: Page, expected: readonly number[], right = 0, up = 0) {
+      let seen: number[] = [];
+      await expect
+        .poll(
+          async () => {
+            seen = await renderedColor(page, right, up);
+            return seen.every((v, i) => Math.abs(v - (expected[i] ?? 0)) <= 10);
+          },
+          {
+            timeout: 5000,
+            message: `expected rgb(${expected.join(', ')}) at (${String(right)}, ${String(up)})`,
+          },
+        )
+        .toBe(true)
+        .catch((error: unknown) => {
+          throw new Error(`${String(error)}
+Saw rgb(${seen.join(', ')})`);
+        });
+    }
+
+    async function fill(page: Page, hex: string, x: number, y: number) {
+      await page.getByLabel('HEX').fill(hex);
+      await page.getByLabel('HEX').press('Enter');
+      const p = await texelPoint(page, x, y);
+      await page.mouse.click(p.x, p.y);
+    }
+
+    test('each face of a painted skin shows its own pixels from every side', async ({
+      page,
+      isMobile,
+    }) => {
+      test.skip(isMobile, 'Desktop shows the 2D texture and the 3D preview side by side.');
+      await page.goto('/editor');
+      await page.getByLabel('Start from').selectOption('blank');
+      await page.getByRole('radio', { name: 'Off' }).click();
+      await page.getByLabel('Lighting').selectOption({ label: 'Flat (exact colors)' });
+
+      // Bucket-fill whole faces with distinct colors (bucket stays inside one face).
+      await page.getByRole('button', { name: 'Bucket fill' }).first().click();
+      await fill(page, '#ff0000', 22, 25); // body front
+      await fill(page, '#0000ff', 35, 25); // body back
+      await fill(page, '#00ff00', 41, 25); // right arm, outer (right) side
+      await fill(page, '#ffff00', 41, 57); // left arm, outer (left) side
+      // An asymmetric marker: the body front's left texture column (player's right side).
+      await page.getByRole('button', { name: 'Line' }).first().click();
+      await page.getByLabel('HEX').fill('#ff00ff');
+      await page.getByLabel('HEX').press('Enter');
+      const top = await texelPoint(page, 20, 20);
+      const bottom = await texelPoint(page, 20, 31);
+      await page.mouse.move(top.x, top.y);
+      await page.mouse.down();
+      await page.mouse.move(bottom.x, bottom.y, { steps: 3 });
+      await page.mouse.up();
+
+      await page.getByRole('button', { name: 'Front', exact: true }).click();
+      await expectColor(page, [255, 0, 0]); // body front in the middle
+      await expectColor(page, [255, 0, 255], -3.5); // marker on the viewer's left = player's right
+      await expectColor(page, [255, 0, 0], 3.5); // not on the other side
+
+      await page.getByRole('button', { name: 'Back', exact: true }).click();
+      await expectColor(page, [0, 0, 255]);
+
+      await page.getByRole('button', { name: 'Right side', exact: true }).click();
+      await expectColor(page, [0, 255, 0]);
+
+      await page.getByRole('button', { name: 'Left side', exact: true }).click();
+      await expectColor(page, [255, 255, 0]);
+    });
+
+    test('lighting presets and intensity apply; flat disables intensity', async ({
+      page,
+      isMobile,
+    }) => {
+      await page.goto('/editor');
+      if (isMobile) await page.getByRole('radio', { name: '3D preview' }).click();
+      const lighting = page.getByLabel('Lighting');
+      const intensity = page.getByLabel('Light intensity');
+      await expect(lighting).toHaveValue('studio');
+      await lighting.selectOption({ label: 'Sunset' });
+      await expect(lighting).toHaveValue('sunset');
+      await intensity.fill('150');
+      await expect(page.getByText('150%')).toBeVisible();
+      await lighting.selectOption({ label: 'Flat (exact colors)' });
+      await expect(intensity).toBeDisabled();
+      await expect(page.getByText('No shading: every pixel shows its exact color.')).toBeVisible();
+    });
+
+    test('the 360° turntable keeps the model turning until switched off', async ({
+      page,
+      isMobile,
+    }) => {
+      await instrumentDraws(page);
+      await page.goto('/editor');
+      if (isMobile) await page.getByRole('radio', { name: '3D preview' }).click();
+      await page.getByRole('radio', { name: 'Off' }).click();
+      const preview = page.getByRole('img', { name: '3D preview of your skin' });
+      await expect(preview).toHaveAttribute('data-frameloop', 'demand');
+      await page.getByRole('switch', { name: '360° turntable' }).click();
+      await expect(preview).toHaveAttribute('data-frameloop', 'always');
+      expect(await drawsDuring(preview)).toBeGreaterThan(0);
+      await page.getByRole('switch', { name: '360° turntable' }).click();
+      await expect(preview).toHaveAttribute('data-frameloop', 'demand');
+    });
+  });
+
   test('phones keep the tools above the texture', async ({ page, isMobile }) => {
     test.skip(!isMobile, 'Phone layout only.');
     await page.goto('/editor');

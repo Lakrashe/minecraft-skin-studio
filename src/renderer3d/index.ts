@@ -11,6 +11,16 @@ export const LazySceneCanvas = lazy(() => import('./SceneCanvas'));
 export const LazyPlayerViewer = lazy(() => import('./PlayerViewer'));
 export type { SceneCanvasProps } from './SceneCanvas';
 export type { PlayerViewerProps } from './PlayerViewer';
-export { CAMERA_VIEWS, type CameraView } from './camera-views';
-export { viewerFrameLoop, type FrameLoop } from './frame-loop';
+// Pure modules only (no three): the rest of core/ loads with the lazy viewer.
+export { CAMERA_VIEWS, type CameraView } from './core/camera-views';
+export { viewerFrameLoop, type FrameLoop } from './core/frame-loop';
+export {
+  DEFAULT_LIGHTING,
+  LIGHTING_PRESETS,
+  MAX_LIGHT_INTENSITY,
+  MIN_LIGHT_INTENSITY,
+  clampLightIntensity,
+  isLightingPreset,
+  type LightingPreset,
+} from './core/lighting';
 export { isWebGLAvailable } from './webgl';

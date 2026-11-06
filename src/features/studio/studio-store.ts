@@ -2,7 +2,12 @@ import { create } from 'zustand';
 import type { SampleId } from '@/content';
 import { clampZoom, type Texel } from '@/editor2d';
 import type { BodyPart, DrawingTool, Rgba, SkinLayer } from '@/engine';
-import type { CameraView } from '@/renderer3d';
+import {
+  DEFAULT_LIGHTING,
+  clampLightIntensity,
+  type CameraView,
+  type LightingPreset,
+} from '@/renderer3d';
 import type { AnimationId } from '@/rig';
 import { INITIAL_SAMPLE } from './document';
 
@@ -47,6 +52,11 @@ export interface StudioState {
    */
   readonly animation: AnimationId | null;
   readonly paused: boolean;
+  /** 360° turntable: the 3D preview rotates on its own (an explicit choice). */
+  readonly turntable: boolean;
+  readonly lighting: LightingPreset;
+  /** Light intensity multiplier, 0.25–2. */
+  readonly lightIntensity: number;
   readonly view: CameraView;
   /** Incremented to re-apply the same camera preset. */
   readonly viewRequest: number;
@@ -71,6 +81,9 @@ export interface StudioState {
   setInspected: (texel: Texel | null) => void;
   setAnimation: (animation: AnimationId) => void;
   togglePaused: () => void;
+  setTurntable: (on: boolean) => void;
+  setLighting: (preset: LightingPreset) => void;
+  setLightIntensity: (intensity: number) => void;
   showView: (view: CameraView) => void;
 }
 
@@ -123,6 +136,9 @@ export const useStudio = create<StudioState>()((set) => ({
   inspected: null,
   animation: null,
   paused: false,
+  turntable: false,
+  lighting: DEFAULT_LIGHTING,
+  lightIntensity: 1,
   view: 'reset',
   viewRequest: 0,
 
@@ -180,6 +196,15 @@ export const useStudio = create<StudioState>()((set) => ({
   },
   togglePaused: () => {
     set((s) => ({ paused: !s.paused }));
+  },
+  setTurntable: (turntable) => {
+    set({ turntable });
+  },
+  setLighting: (lighting) => {
+    set({ lighting });
+  },
+  setLightIntensity: (intensity) => {
+    set({ lightIntensity: clampLightIntensity(intensity) });
   },
   showView: (view) => {
     set((s) => ({ view, viewRequest: s.viewRequest + 1 }));

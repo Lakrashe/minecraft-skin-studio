@@ -9,7 +9,9 @@ gallery, and an optional marketplace.
 > character) and the Studio in viewer mode (2D texture + 3D preview of original
 > sample characters) are built, and the Studio is a working 64×64 pixel editor
 > (pencil, eraser, bucket, eyedropper, line, rectangle, mirror drawing, undo/redo,
-> color picker, palettes) with a live 3D preview. Saving across reloads and PNG
+> color picker, palettes) with a live 3D preview built on a tested,
+> UI-independent rendering core (Java-accurate Steve/Alex models, lighting
+> presets, 360° turntable). Saving across reloads and PNG
 > import/export are not built yet. See [`docs/DEVELOPMENT_ROADMAP.md`](docs/DEVELOPMENT_ROADMAP.md).
 
 ## Documentation

@@ -28,6 +28,7 @@ const RIG = 'src/rig/index.ts';
 const EDITOR = 'src/editor2d/index.ts';
 const RENDERER = 'src/renderer3d/webgl.ts';
 const FEATURE = 'src/features/home/index.ts';
+const RENDER_CORE = 'src/renderer3d/core/player-rig.ts';
 const APP = 'src/app/navigation.ts';
 
 describe('engine and rig stay pure', () => {
@@ -78,6 +79,34 @@ describe('2D editor and 3D renderer stay separate', () => {
   it('editor2d may use engine and platform', async () => {
     expect(
       await boundaryErrors(EDITOR, "export * from '@/engine';\nexport * from '@/platform';"),
+    ).toEqual([]);
+  });
+});
+
+describe('3D rendering core is independent of the UI', () => {
+  it('rejects React, React Three Fiber and browser APIs', async () => {
+    expect(await boundaryErrors(RENDER_CORE, "export { useState } from 'react';")).not.toEqual([]);
+    expect(
+      await boundaryErrors(RENDER_CORE, "export { Canvas } from '@react-three/fiber';"),
+    ).not.toEqual([]);
+    expect(
+      await boundaryErrors(RENDER_CORE, "export const l = () => import('@react-three/drei');"),
+    ).not.toEqual([]);
+    expect(await boundaryErrors(RENDER_CORE, 'export const w = window.innerWidth;')).not.toEqual(
+      [],
+    );
+  });
+
+  it('may use three, the engine and the rig', async () => {
+    expect(
+      await boundaryErrors(
+        RENDER_CORE,
+        [
+          "export { Group } from 'three';",
+          "export * from '@/engine';",
+          "export * from '@/rig';",
+        ].join('\n'),
+      ),
     ).toEqual([]);
   });
 });

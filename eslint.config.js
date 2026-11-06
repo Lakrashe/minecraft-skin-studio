@@ -240,6 +240,16 @@ export default tseslint.config(
     allowed: ['engine', 'rig', 'platform'],
     message: 'renderer3d/ must never import editor2d/ or UI modules (docs/ARCHITECTURE.md §2).',
   }),
+  // The rendering core is plain Three.js: no React/R3F and no DOM, so it stays
+  // independent of any UI and testable in Node (docs/ARCHITECTURE.md §6).
+  boundary({
+    files: ['src/renderer3d/core/**'],
+    own: 'renderer3d',
+    allowed: ['engine', 'rig', 'platform'],
+    message: 'renderer3d/core is UI-independent: no React, R3F or browser APIs.',
+    packages: ['react', 'react-dom', 'react-dom/*', '@react-three/*'],
+    noBrowser: true,
+  }),
   boundary({
     files: ['src/ui/**'],
     own: 'ui',

@@ -418,19 +418,36 @@ interface DocumentStore {
 
 ## 6. 3D renderer (`renderer3d/`)
 
-- React Three Fiber + Drei. `PlayerModel` builds boxes for each part (inner +
-  inflated outer shell) with UVs **computed from engine region tables**.
-- One `THREE.DataTexture` (64×64 RGBA, `NearestFilter`, no mipmaps, sRGB).
-  On every store change, copy the flattened buffer into the texture and set
-  `needsUpdate` — done in a store subscription, **not** via React state.
-  (64×64×4 = 16 KB; a full upload per change is cheap and simpler than sub-rects.)
-- Materials: inner layer `alphaTest` cutout; outer layer `transparent` with
-  `alphaTest` and `depthWrite` tuned to avoid sorting artifacts; `side`
-  double for outer shell. Wireframe and texture-inspection (UV checker/face
-  highlight) modes.
+**Implemented structure (owner's "Phase 4"):**
+- `renderer3d/core/` — the rendering engine: plain Three.js and pure data, no
+  React and no DOM (enforced by lint, fixture-tested). `PlayerRig` builds the
+  player (6 pivots, 12 meshes) from `player-geometry` and engine region tables,
+  owns one 64×64 `DataTexture` and the materials, and exposes `setSkin`,
+  `setVisibility`, `setUnlit`, `setPose`, `dispose`. `lighting.ts` defines the
+  lighting presets as data; `camera-views.ts` and `frame-loop.ts` are pure.
+  All of it is tested in Node: sizes and joints of both models, and the UV of
+  every corner of all 72 faces per model against an independent orientation
+  table.
+- `renderer3d/*.tsx` — the React binding: `SceneCanvas`, `PlayerViewer`
+  (orbit controls, camera presets, lights from a preset, frame loop) and a thin
+  `PlayerModel` that drives a `PlayerRig`. Features import only `@/renderer3d`;
+  the core loads with the lazy 3D chunk.
+
+**Design and rules:**
+- React Three Fiber + Drei. Boxes per part (inner + inflated outer shell) with
+  UVs **computed from engine region tables**.
+- One `THREE.DataTexture` (64×64 RGBA, `NearestFilter`, no mipmaps, sRGB) per
+  rig; each new skin is copied in and `needsUpdate` set (16 KB per upload).
+- Materials (Java Edition behavior): inner layer opaque, alpha ignored (the
+  game forces base alpha to 255); outer layer `transparent`, `alphaTest` 0.1
+  (the game's cut-off), double-sided, drawn after the inner box. "Flat"
+  lighting swaps to unlit materials without tone mapping, so pixels show their
+  exact colors. Wireframe and texture-inspection modes: not built yet.
 - Camera: `OrbitControls` (rotate/zoom/pan), animated presets (front, back,
   side, top, reset), fullscreen via Fullscreen API.
-- Lighting presets as data (studio, daylight, sunset, neon, cinematic) + intensity.
+- Lighting presets as data (studio, daylight, sunset, neon, cinematic, flat) +
+  intensity 25–200 % (implemented; `flat` is unlit, exact colors).
+- 360° turntable: orbit auto-rotation, an explicit user choice in the Studio.
 - Animation: `rig/` clips sampled per frame in `useFrame`, applied to part
   pivots; pause/resume; custom poses from `rig`.
 - Picking for paint-on-model: raycast → face + UV → texel → engine tool.

@@ -67,10 +67,16 @@ v+d+h└───────┴─────────┴──────
 "Right"/"left" here are the cuboid's sides as named in the net: the "right" face
 is the one on the **left** of the net. Name faces consistently in code
 (`top | bottom | right | front | left | back`) and never mix with
-screen-relative directions. The 3D renderer maps the bottom face flipped
-vertically relative to the other faces, the convention used by established
-skin renderers; confirm against the game with an asymmetric test skin
-**(verify)**.
+screen-relative directions.
+
+**Orientation on the model** (as seen from outside; tested face by face in
+`renderer3d/core/player-rig.test.ts` and in a real-WebGL browser test):
+side faces are upright with the texture's left edge on the viewer's left
+(front: player's right side on the left). Top **and bottom** faces both put
+the player's right side (−x) on the texture's left and the back (−z) on the
+texture's top row — so the bottom face looks flipped vertically compared with
+the side faces, the convention of established skin renderers (skinview3d).
+Confirm against the game with an asymmetric test skin **(verify)**.
 
 ---
 
@@ -120,9 +126,13 @@ layers overlap, and all rects lie inside 64×64.
 
 ## 5. Layers and transparency
 
-- **Base layer** (inner): expected to be fully opaque. Minecraft does not show
-  transparent base pixels as see-through on most parts. Export should warn
-  about non-opaque base pixels; whether to auto-fill them is a spec decision.
+- **Base layer** (inner): expected to be fully opaque. Java Edition forces the
+  base-layer alpha to 255 when it loads a skin, so a transparent base pixel shows
+  its RGB (often black) instead of being see-through. The 3D preview does the
+  same (the inner material ignores alpha). Export should warn about non-opaque
+  base pixels; whether to auto-fill them is a spec decision.
+- **Outer cut-off:** the game's entity shaders discard pixels below 10 % alpha;
+  the preview uses the same 0.1 cut-off.
 - **Overlay layer** (outer): transparent pixels are see-through. Rendered as a
   slightly larger shell around the base part.
 - **Semi-transparent** overlay pixels (alpha 1–254): handling differs across
@@ -194,9 +204,18 @@ The player faces +z; their right side is −x.
 |---|---|---|---|
 | Head | 8×8×8 | (0, 24, 0) neck | y 28 |
 | Body | 8×12×4 | (0, 24, 0) | y 18 |
-| Right arm | 4×12×4 (slim 3×12×4) | (−5, 22, 0) shoulder | x −(4 + w/2), y 18 |
-| Left arm | same | (5, 22, 0) | x 4 + w/2, y 18 |
-| Right leg | 4×12×4 | (−2, 12, 0) hip | x −2, y 6 |
-| Left leg | 4×12×4 | (2, 12, 0) | x 2, y 6 |
+| Right arm | 4×12×4 (slim 3×12×4) | (−5, 22, 0) shoulder; slim (−5, 21.5, 0) | x −(4 + w/2), y 18 (slim 17.5) |
+| Left arm | same | (5, 22, 0); slim (5, 21.5, 0) | x 4 + w/2, y 18 (slim 17.5) |
+| Right leg | 4×12×4 | (−1.9, 12, 0) hip | x −1.9, y 6 |
+| Left leg | 4×12×4 | (1.9, 12, 0) | x 1.9, y 6 |
 
-Implemented and tested in `src/renderer3d/player-geometry.ts`.
+Values follow Java Edition's player model:
+- **Hips at ±1.9**, not ±2: legs sit 0.1 inside the body outline and overlap
+  0.2 at the center (the overlap is hidden inside the legs).
+- **Slim arms hang half a pixel lower** (shoulder joint 2.5 below the neck
+  instead of 2) **(verify)** — skinview3d does not do this.
+- Overlay inflation: 0.5 per side for the hat, 0.25 for jacket, sleeves, pants.
+
+Implemented in `src/renderer3d/core/player-geometry.ts` and built as Three.js
+meshes by `core/player-rig.ts`; both are tested in Node (sizes, joints and the
+UV of every face corner for both models).

@@ -1,19 +1,8 @@
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
-import {
-  BoxGeometry,
-  DataTexture,
-  DoubleSide,
-  FrontSide,
-  MeshStandardMaterial,
-  NearestFilter,
-  RGBAFormat,
-  SRGBColorSpace,
-  type Group,
-} from 'three';
-import { SKIN_HEIGHT, SKIN_WIDTH, type BodyPart, type PixelBuffer, type SkinModel } from '@/engine';
+import type { BodyPart, PixelBuffer, SkinModel } from '@/engine';
 import { sampleAnimation, type AnimationId } from '@/rig';
-import { partUvs, playerLayout } from './player-geometry';
+import { PlayerRig } from './core';
 
 export interface PlayerModelProps {
   readonly skin: PixelBuffer;
@@ -24,39 +13,14 @@ export interface PlayerModelProps {
   readonly visibleParts?: ReadonlySet<BodyPart>;
   readonly animation?: AnimationId;
   readonly paused?: boolean;
-}
-
-/** One reusable 64×64 texture with its own pixel copy; new skins are copied in. */
-function createSkinTexture(): DataTexture {
-  const data = new Uint8Array(SKIN_WIDTH * SKIN_HEIGHT * 4);
-  const texture = new DataTexture(data, SKIN_WIDTH, SKIN_HEIGHT, RGBAFormat);
-  texture.magFilter = NearestFilter;
-  texture.minFilter = NearestFilter;
-  texture.generateMipmaps = false;
-  texture.colorSpace = SRGBColorSpace;
-  texture.needsUpdate = true;
-  return texture;
-}
-
-function partGeometry(
-  size: readonly [number, number, number],
-  inflate: number,
-  uvs: Float32Array,
-): BoxGeometry {
-  const geometry = new BoxGeometry(
-    size[0] + inflate * 2,
-    size[1] + inflate * 2,
-    size[2] + inflate * 2,
-  );
-  geometry.getAttribute('uv').array.set(uvs);
-  geometry.getAttribute('uv').needsUpdate = true;
-  return geometry;
+  /** Ignore lights and show exact texture colors. */
+  readonly unlit?: boolean;
 }
 
 /**
- * Minecraft player built from engine UV tables: six parts, each an inner box
- * plus a slightly larger outer-layer shell. The texture is the actual skin, so
- * transparent outer pixels are see-through and the base layer is opaque.
+ * React binding for the rendering core's `PlayerRig`: one rig per model (Steve
+ * or Alex), props applied to it, animation sampled every frame. Geometry, UV
+ * mapping and material rules live in `core/` and are unit-tested there.
  */
 export function PlayerModel({
   skin,
@@ -66,109 +30,32 @@ export function PlayerModel({
   visibleParts,
   animation = 'idle',
   paused = false,
+  unlit = false,
 }: PlayerModelProps) {
-  // One texture and one pair of materials for the model's lifetime: each new
-  // skin (every stroke, undo, redo) is copied into the texture and re-uploaded,
-  // instead of allocating GPU resources per change (ARCHITECTURE §6).
-  const texture = useMemo(() => createSkinTexture(), []);
+  const rig = useMemo(() => new PlayerRig(model), [model]);
+  useEffect(
+    () => () => {
+      rig.dispose();
+    },
+    [rig],
+  );
+
+  // Layout effects run before the next frame is drawn.
   useLayoutEffect(() => {
-    (texture.image.data as Uint8Array).set(skin.data.subarray(0, SKIN_WIDTH * SKIN_HEIGHT * 4));
-    texture.needsUpdate = true;
-  }, [texture, skin]);
-  useEffect(
-    () => () => {
-      texture.dispose();
-    },
-    [texture],
-  );
+    rig.setSkin(skin);
+  }, [rig, skin]);
+  useLayoutEffect(() => {
+    rig.setVisibility({ showInner, showOuter, visibleParts });
+  }, [rig, showInner, showOuter, visibleParts]);
+  useLayoutEffect(() => {
+    rig.setUnlit(unlit);
+  }, [rig, unlit]);
 
-  const materials = useMemo(
-    () => ({
-      // Base layer is opaque in game.
-      inner: new MeshStandardMaterial({
-        map: texture,
-        roughness: 1,
-        metalness: 0,
-        side: FrontSide,
-      }),
-      // Outer layer: transparent pixels cut out, both sides visible like the game.
-      outer: new MeshStandardMaterial({
-        map: texture,
-        roughness: 1,
-        metalness: 0,
-        transparent: true,
-        alphaTest: 0.1,
-        side: DoubleSide,
-      }),
-    }),
-    [texture],
-  );
-  useEffect(
-    () => () => {
-      materials.inner.dispose();
-      materials.outer.dispose();
-    },
-    [materials],
-  );
-
-  const parts = useMemo(
-    () =>
-      playerLayout(model).map((layout) => ({
-        layout,
-        inner: partGeometry(layout.size, 0, partUvs(layout.part, 'inner', model)),
-        outer: partGeometry(layout.size, layout.outerInflate, partUvs(layout.part, 'outer', model)),
-      })),
-    [model],
-  );
-  useEffect(
-    () => () => {
-      for (const p of parts) {
-        p.inner.dispose();
-        p.outer.dispose();
-      }
-    },
-    [parts],
-  );
-
-  const pivots = useRef<Partial<Record<BodyPart, Group | null>>>({});
   const time = useRef(0);
-
   useFrame((_, delta) => {
     if (!paused) time.current += Math.min(delta, 0.1);
-    const pose = sampleAnimation(animation, time.current);
-    for (const part of Object.keys(pivots.current) as BodyPart[]) {
-      const group = pivots.current[part];
-      const r = pose[part];
-      group?.rotation.set(r.x, r.y, r.z);
-    }
+    rig.setPose(sampleAnimation(animation, time.current));
   });
 
-  return (
-    <group>
-      {parts.map(({ layout, inner, outer }) => {
-        if (visibleParts && !visibleParts.has(layout.part)) return null;
-        return (
-          <group
-            key={layout.part}
-            position={layout.pivot}
-            ref={(group) => {
-              pivots.current[layout.part] = group;
-            }}
-          >
-            {showInner && (
-              <mesh geometry={inner} material={materials.inner} position={layout.offset} />
-            )}
-            {showOuter && (
-              <mesh
-                geometry={outer}
-                material={materials.outer}
-                position={layout.offset}
-                renderOrder={1}
-              />
-            )}
-          </group>
-        );
-      })}
-    </group>
-  );
+  return <primitive object={rig.root} />;
 }
