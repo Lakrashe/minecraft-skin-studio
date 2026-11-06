@@ -16,3 +16,14 @@ export {
 } from './settings';
 export { createResilientStorage, usePersistenceStatus } from './resilient-storage';
 export { resolveMotion, useMediaQuery, useReducedMotion, type ResolvedMotion } from './media';
+export {
+  MAX_PALETTES,
+  MAX_PALETTE_COLORS,
+  MAX_PALETTE_NAME,
+  PALETTES_STORAGE_KEY,
+  isPaletteColor,
+  sanitizePalettes,
+  usePalettes,
+  type CustomPalette,
+  type PalettesState,
+} from './palettes';

@@ -195,7 +195,7 @@ test('layout has no horizontal overflow at any width', async ({ page }) => {
 test.describe('homepage', () => {
   test('hero CTA opens the studio', async ({ page }) => {
     await page.goto('/');
-    await page.getByRole('link', { name: 'Open the Studio' }).first().click();
+    await page.getByRole('link', { name: 'Start Creating' }).first().click();
     await expect(page).toHaveURL(/\/editor$/);
     await expect(page.getByRole('heading', { level: 1, name: 'Studio' })).toBeVisible();
   });
@@ -216,22 +216,41 @@ test.describe('homepage', () => {
       'true',
     );
     await page.getByRole('link', { name: 'Open in Studio' }).click();
-    await expect(page).toHaveURL(/\/editor\?sample=mage$/);
-    await expect(page.getByLabel('Character', { exact: true })).toHaveValue('mage');
+    // The sample is loaded once and the URL is cleaned up.
+    await expect(page).toHaveURL(/\/editor$/);
+    await expect(page.getByLabel('Start from', { exact: true })).toHaveValue('mage');
   });
 
   test('feature cards state honestly what is available', async ({ page }) => {
     await page.goto('/');
     const features = page.locator('#features');
-    await expect(features.getByText('Available now')).toHaveCount(1);
+    await expect(features.getByText('Available now')).toHaveCount(2);
     await expect(features.getByText('Planned')).toHaveCount(4);
   });
 });
 
 test.describe('studio', () => {
+  /** Screen position of a texel's center on the 2D texture. */
+  async function texelPoint(page: Page, x: number, y: number) {
+    const texture = page.getByRole('img', { name: /64×64 skin texture/ });
+    const box = await texture.boundingBox();
+    if (!box) throw new Error('texture not visible');
+    const zoom = box.width / 64;
+    return { x: box.x + (x + 0.5) * zoom, y: box.y + (y + 0.5) * zoom };
+  }
+
+  /** Hovers a texel and returns the status bar that describes it. */
+  async function colorAt(page: Page, x: number, y: number) {
+    const p = await texelPoint(page, x, y);
+    await page.mouse.move(p.x, p.y);
+    const status = page.getByRole('status').filter({ hasText: `Pixel ${String(x)}, ${String(y)}` });
+    await expect(status).toBeVisible();
+    return status;
+  }
+
   test('inspects pixels with the keyboard', async ({ page }) => {
     await page.goto('/editor?sample=knight');
-    const texture = page.getByRole('img', { name: /64×64 skin texture of Knight/ });
+    const texture = page.getByRole('img', { name: /64×64 skin texture/ });
     await texture.focus();
     await page.keyboard.press('Shift+ArrowRight');
     await page.keyboard.press('Shift+ArrowDown');
@@ -239,19 +258,331 @@ test.describe('studio', () => {
     await expect(page.getByText('Head · Front · Inner')).toBeVisible();
   });
 
-  test('view controls change state and there are no editing controls', async ({
+  test('draws with the mouse; undo and redo restore the exact pixel', async ({ page }) => {
+    await page.goto('/editor');
+    const before = (await (await colorAt(page, 10, 10)).textContent()) ?? '';
+    const a = await texelPoint(page, 9, 10);
+    const b = await texelPoint(page, 13, 10);
+    await page.mouse.move(a.x, a.y);
+    await page.mouse.down();
+    await page.mouse.move(b.x, b.y, { steps: 4 });
+    await page.mouse.up();
+    await expect(await colorAt(page, 10, 10)).toContainText('#3fa34d');
+    await expect(await colorAt(page, 13, 10)).toContainText('#3fa34d');
+
+    await page.keyboard.press('Control+z');
+    await expect(await colorAt(page, 10, 10)).toHaveText(before);
+    await page.keyboard.press('Control+Shift+z');
+    await expect(await colorAt(page, 10, 10)).toContainText('#3fa34d');
+    await page.getByRole('button', { name: 'Undo' }).click();
+    await expect(await colorAt(page, 10, 10)).toHaveText(before);
+  });
+
+  test('tools: line, mirror drawing, eraser and HEX color', async ({ page, isMobile }) => {
+    await page.goto('/editor?sample=knight');
+    if (isMobile) await page.getByRole('radio', { name: 'Tools', exact: true }).click();
+    await page.getByLabel('HEX').fill('#ff0000');
+    if (isMobile) await page.getByRole('radio', { name: '2D texture' }).click();
+    await page.getByRole('img', { name: /64×64 skin texture/ }).focus();
+
+    // Line (L) across the body front.
+    await page.keyboard.press('l');
+    const from = await texelPoint(page, 20, 22);
+    const to = await texelPoint(page, 27, 22);
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(to.x, to.y, { steps: 3 });
+    await page.mouse.up();
+    await expect(await colorAt(page, 24, 22)).toContainText('#ff0000');
+
+    // Mirror (M) + pencil (B): the right arm front is mirrored onto the left arm front.
+    await page.keyboard.press('m');
+    await page.keyboard.press('b');
+    const arm = await texelPoint(page, 44, 21);
+    await page.mouse.click(arm.x, arm.y);
+    await expect(await colorAt(page, 39, 53)).toContainText('#ff0000');
+
+    // Eraser (E) makes a pixel transparent.
+    await page.keyboard.press('e');
+    const head = await texelPoint(page, 9, 9);
+    await page.mouse.click(head.x, head.y);
+    await expect(await colorAt(page, 9, 9)).toContainText('Transparent');
+  });
+
+  test('custom palettes are saved on the device', async ({ page, isMobile }) => {
+    await page.goto('/editor');
+    if (isMobile) await page.getByRole('radio', { name: 'Tools', exact: true }).click();
+    await page.getByRole('button', { name: 'New palette' }).click();
+    await page.getByLabel('Name').fill('Armor');
+    await page.getByRole('button', { name: 'Save' }).click();
+    await page.getByLabel('HEX').fill('#123456');
+    await page.getByRole('button', { name: 'Add current color' }).click();
+    await page.reload();
+    if (isMobile) await page.getByRole('radio', { name: 'Tools', exact: true }).click();
+    await page.getByLabel('Palette', { exact: true }).selectOption({ label: 'Armor' });
+    await expect(page.getByRole('button', { name: 'Use #123456' })).toBeVisible();
+  });
+
+  test('the 3D preview redraws when the texture changes', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'Desktop shows the 2D texture and the 3D preview side by side.');
+    await instrumentDraws(page);
+    await page.goto('/editor');
+    await page.getByRole('radio', { name: 'Off' }).click();
+    const preview = page.getByRole('img', { name: '3D preview of your skin' });
+    await expect(preview).toHaveAttribute('data-frameloop', 'demand');
+    expect(await drawsDuring(preview)).toBe(0);
+    const canvas = preview.locator('canvas');
+    const before = Number((await canvas.getAttribute('data-draws')) ?? '0');
+    const p = await texelPoint(page, 10, 10);
+    await page.mouse.click(p.x, p.y);
+    await expect
+      .poll(async () => Number((await canvas.getAttribute('data-draws')) ?? '0'))
+      .toBeGreaterThan(before);
+  });
+
+  test('pinch zooms the texture without drawing', async ({ page, isMobile }) => {
+    test.skip(!isMobile, 'Touch gestures run in the phone project.');
+    await page.goto('/editor');
+    const texture = page.getByRole('img', { name: /64×64 skin texture/ });
+    const zoom = page.getByRole('region', { name: '2D texture' }).locator('output');
+    await expect(texture).toBeVisible();
+    const before = Number.parseInt((await zoom.textContent()) ?? '0', 10);
+    const box = await texture.boundingBox();
+    if (!box) throw new Error('texture not visible');
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
+
+    // Two fingers land on the texture and spread apart.
+    const cdp = await page.context().newCDPSession(page);
+    const touch = (type: 'touchStart' | 'touchMove' | 'touchEnd', spread: number) =>
+      cdp.send('Input.dispatchTouchEvent', {
+        type,
+        touchPoints:
+          type === 'touchEnd'
+            ? []
+            : [
+                { x: cx - spread, y: cy, id: 1 },
+                { x: cx + spread, y: cy, id: 2 },
+              ],
+      });
+    await touch('touchStart', 20);
+    for (const spread of [30, 40, 50, 60]) await touch('touchMove', spread);
+    await touch('touchEnd', 60);
+
+    await expect
+      .poll(async () => Number.parseInt((await zoom.textContent()) ?? '0', 10))
+      .toBeGreaterThan(before);
+    // The first finger's stroke was cancelled: nothing to undo.
+    await expect(page.getByRole('button', { name: 'Undo' })).toBeDisabled();
+  });
+
+  test('face labels can be shown and hide when too small to read', async ({ page, isMobile }) => {
+    await page.goto('/editor');
+    const labels = page.getByTestId('face-labels');
+    await expect(labels).toHaveAttribute('data-labels', '0');
+    if (isMobile) await page.getByRole('radio', { name: 'Tools', exact: true }).click();
+    await page.getByRole('switch', { name: 'Face labels' }).click();
+    if (isMobile) await page.getByRole('radio', { name: '2D texture' }).click();
+    const texture = page.getByRole('img', { name: /64×64 skin texture/ });
+    const zoom = page.getByRole('region', { name: '2D texture' }).locator('output');
+    await texture.focus();
+    // How many labels fit at a middle zoom depends on the platform's font
+    // metrics, so check the two font-independent ends instead. At 24× even the
+    // smallest face (4×4 → 96 px) fits its short name, so all 72 are labeled.
+    for (let i = 0; i < 24; i++) await page.keyboard.press('+');
+    await expect(zoom).toHaveText('24×');
+    await expect(labels).toHaveAttribute('data-labels', '72');
+    // Below 6× nothing is drawn: the text could not be read.
+    for (let i = 0; i < 24; i++) await page.keyboard.press('-');
+    await expect(zoom).toHaveText('2×');
+    await expect(labels).toHaveAttribute('data-labels', '0');
+    // Switching them off removes them at any zoom.
+    for (let i = 0; i < 24; i++) await page.keyboard.press('+');
+    await expect(labels).toHaveAttribute('data-labels', '72');
+    if (isMobile) await page.getByRole('radio', { name: 'Tools', exact: true }).click();
+    await page.getByRole('switch', { name: 'Face labels' }).click();
+    await expect(labels).toHaveAttribute('data-labels', '0');
+  });
+
+  test.describe('audit regressions', () => {
+    test('undo while the mouse is still down keeps history exact (P1)', async ({
+      page,
+      isMobile,
+    }) => {
+      test.skip(isMobile, 'Mouse input; the engine and component tests cover the logic.');
+      await page.goto('/editor');
+      const original = (await (await colorAt(page, 8, 8)).textContent()) ?? '';
+      const a = await texelPoint(page, 8, 8);
+      await page.mouse.click(a.x, a.y); // commit a green pixel at (8,8)
+      await expect(await colorAt(page, 8, 8)).toContainText('#3fa34d');
+
+      await page.getByLabel('HEX').fill('#0000ff');
+      await page.getByLabel('HEX').press('Enter');
+      const b = await texelPoint(page, 9, 8);
+      await page.mouse.move(b.x, b.y);
+      await page.mouse.down(); // blue stroke over (9,8)…
+      await page.mouse.move(a.x, a.y, { steps: 2 }); // …and (8,8)
+      await page.keyboard.press('Control+z'); // undo the green pixel mid-stroke
+      await page.mouse.up();
+
+      await expect(await colorAt(page, 8, 8)).toHaveText(original);
+      await expect(page.getByRole('button', { name: 'Undo' })).toBeDisabled();
+      await page.keyboard.press('Control+Shift+z');
+      await expect(await colorAt(page, 8, 8)).toContainText('#3fa34d');
+    });
+
+    test('typing a HEX color, painting, then shortcuts all work (P2)', async ({
+      page,
+      isMobile,
+    }) => {
+      await page.goto('/editor');
+      if (isMobile) await page.getByRole('radio', { name: 'Tools', exact: true }).click();
+      const hex = page.getByLabel('HEX');
+      await hex.click();
+      await hex.press('Control+a');
+      await hex.pressSequentially('#123456');
+      await expect(hex).toHaveValue('#123456');
+      if (isMobile) await page.getByRole('radio', { name: '2D texture' }).click();
+
+      // No programmatic focus: a normal click on the texture.
+      const p = await texelPoint(page, 12, 12);
+      await page.mouse.click(p.x, p.y);
+      await expect(await colorAt(page, 12, 12)).toContainText('#123456');
+      await page.keyboard.press('Control+z');
+      await expect(await colorAt(page, 12, 12)).not.toContainText('#123456');
+      await page.keyboard.press('e');
+      if (isMobile) {
+        const strip = page.getByRole('toolbar', { name: 'Tools' });
+        await expect(strip.getByRole('button', { name: 'Eraser' })).toHaveAttribute(
+          'aria-pressed',
+          'true',
+        );
+      } else {
+        await expect(page.getByRole('button', { name: 'Eraser' })).toHaveAttribute(
+          'aria-pressed',
+          'true',
+        );
+      }
+    });
+
+    test('leaving mid-stroke leaves no phantom pixels (P2)', async ({ page, isMobile }) => {
+      test.skip(isMobile, 'Uses the desktop header link.');
+      await page.goto('/editor');
+      await page.getByLabel('Start from').selectOption('blank');
+      const p = await texelPoint(page, 10, 10);
+      await page.mouse.move(p.x, p.y);
+      await page.mouse.down();
+      // Navigate with the app's own link while the button is still down.
+      await page.evaluate(() => {
+        document.querySelector<HTMLAnchorElement>('header a[href="/settings"]')?.click();
+      });
+      await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible();
+      await page.mouse.up();
+      await page.getByRole('link', { name: 'Studio', exact: true }).first().click();
+      await expect(await colorAt(page, 10, 10)).toContainText('Transparent');
+      await expect(page.getByRole('button', { name: 'Undo' })).toBeEnabled(); // only the "blank" load
+    });
+
+    test('a pinch with the second finger beside the texture paints nothing (P2)', async ({
+      page,
+      isMobile,
+    }) => {
+      test.skip(!isMobile, 'Touch gestures run in the phone project.');
+      await page.goto('/editor');
+      const texture = page.getByRole('img', { name: /64×64 skin texture/ });
+      await expect(texture).toBeVisible();
+      const box = await texture.boundingBox();
+      if (!box) throw new Error('texture not visible');
+      const first = { x: box.x + box.width * 0.2, y: box.y + box.height * 0.2 };
+      const second = { x: box.x - 8, y: box.y + box.height * 0.2 }; // workspace padding
+      const cdp = await page.context().newCDPSession(page);
+      const send = (
+        type: 'touchStart' | 'touchMove' | 'touchEnd',
+        points: { x: number; y: number; id: number }[],
+      ) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points });
+      await send('touchStart', [{ ...first, id: 1 }]);
+      await send('touchStart', [
+        { ...first, id: 1 },
+        { ...second, id: 2 },
+      ]);
+      for (const d of [10, 20, 30, 40]) {
+        await send('touchMove', [
+          { x: first.x + d, y: first.y, id: 1 },
+          { x: second.x - d, y: second.y, id: 2 },
+        ]);
+      }
+      await send('touchEnd', []);
+      await expect(page.getByRole('button', { name: 'Undo' })).toBeDisabled();
+    });
+
+    test('Space still toggles a focused switch (P3)', async ({ page, isMobile }) => {
+      await page.goto('/editor');
+      if (isMobile) await page.getByRole('radio', { name: 'Tools', exact: true }).click();
+      const mirror = page.getByRole('switch', { name: 'Mirror drawing' });
+      await mirror.focus();
+      await page.keyboard.press('Space');
+      await expect(mirror).toHaveAttribute('aria-checked', 'true');
+    });
+
+    test('moving within one texel does not recreate GPU textures (P3)', async ({
+      page,
+      isMobile,
+    }) => {
+      test.skip(isMobile, 'Desktop shows the 2D texture and the 3D preview side by side.');
+      await page.addInitScript(() => {
+        const counter = globalThis as unknown as { __textures: number };
+        counter.__textures = 0;
+        const proto = WebGL2RenderingContext.prototype;
+        // eslint-disable-next-line @typescript-eslint/unbound-method -- re-bound with apply
+        const create = proto.createTexture;
+        proto.createTexture = function (this: WebGL2RenderingContext) {
+          counter.__textures++;
+          return create.apply(this);
+        };
+      });
+      await page.goto('/editor');
+      const preview = page.getByRole('img', { name: '3D preview of your skin' });
+      await expect(preview.locator('canvas')).toBeVisible();
+      const p = await texelPoint(page, 10, 10);
+      await page.mouse.move(p.x, p.y);
+      await page.mouse.down();
+      await page.waitForTimeout(300);
+      const count = () =>
+        page.evaluate(() => (globalThis as unknown as { __textures: number }).__textures);
+      const before = await count();
+      for (let i = 0; i < 20; i++) await page.mouse.move(p.x + (i % 2), p.y + (i % 2));
+      await page.waitForTimeout(300);
+      expect(await count()).toBe(before);
+      await page.mouse.up();
+      await expect(await colorAt(page, 10, 10)).toContainText('#3fa34d');
+    });
+  });
+
+  test('phones keep the tools above the texture', async ({ page, isMobile }) => {
+    test.skip(!isMobile, 'Phone layout only.');
+    await page.goto('/editor');
+    const strip = page.getByRole('toolbar', { name: 'Tools' });
+    await expect(strip).toBeVisible();
+    await strip.getByRole('button', { name: 'Eraser' }).click();
+    await expect(strip.getByRole('button', { name: 'Eraser' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+  });
+
+  test('view controls work; import, export and save are not offered yet', async ({
     page,
     isMobile,
   }) => {
     await page.goto('/editor');
-    if (isMobile) await page.getByRole('radio', { name: 'View', exact: true }).click();
+    if (isMobile) await page.getByRole('radio', { name: 'Tools', exact: true }).click();
     const head = page.getByRole('button', { name: 'Head', exact: true });
     await head.click();
     await expect(head).toHaveAttribute('aria-pressed', 'true');
     const outer = page.getByRole('switch', { name: 'Outer layer' });
     await outer.click();
     await expect(outer).toHaveAttribute('aria-checked', 'false');
-    for (const name of [/^undo/i, /^redo/i, /^export/i, /^import/i, /^save/i]) {
+    for (const name of [/^export/i, /^import/i, /^save$/i, /^download/i]) {
       await expect(page.getByRole('button', { name })).toHaveCount(0);
     }
   });
@@ -259,7 +590,7 @@ test.describe('studio', () => {
   test('renders the 3D preview with camera controls', async ({ page, isMobile }) => {
     await page.goto('/editor');
     if (isMobile) await page.getByRole('radio', { name: '3D preview' }).click();
-    const preview = page.getByRole('img', { name: '3D preview of Explorer' });
+    const preview = page.getByRole('img', { name: '3D preview of your skin' });
     await expect(preview.locator('canvas')).toBeVisible();
     await page.getByRole('button', { name: 'Back', exact: true }).click();
     await page.getByRole('radio', { name: 'Walk' }).click();
@@ -392,12 +723,12 @@ test.describe('3D motion and render budget', () => {
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     await page.goto('/editor');
     await page.getByRole('radio', { name: '3D preview' }).click();
-    const preview = page.getByRole('img', { name: '3D preview of Explorer' });
+    const preview = page.getByRole('img', { name: '3D preview of your skin' });
     await expect(preview.locator('canvas')).toBeVisible();
     expect(await drawsDuring(preview)).toBeGreaterThan(0);
 
     await page.getByRole('radio', { name: '2D texture' }).click();
-    const hidden = page.getByRole('img', { name: '3D preview of Explorer', includeHidden: true });
+    const hidden = page.getByRole('img', { name: '3D preview of your skin', includeHidden: true });
     await expect(hidden).toHaveAttribute('data-frameloop', 'never');
     expect(await drawsDuring(hidden)).toBe(0);
   });
@@ -421,7 +752,10 @@ test.describe('studio without WebGL', () => {
 
   test('the flat fallback follows layer and body-part settings', async ({ page, isMobile }) => {
     await page.goto('/editor?sample=knight');
-    const flat = page.getByRole('img', { name: 'Flat front view of Knight', includeHidden: true });
+    const flat = page.getByRole('img', {
+      name: 'Flat front view of your skin',
+      includeHidden: true,
+    });
     await expect(flat).toBeAttached();
     const alpha = () =>
       flat.evaluate((canvas: HTMLCanvasElement) => {
@@ -439,7 +773,7 @@ test.describe('studio without WebGL', () => {
     await expect(page.getByRole('button', { name: 'Back', exact: true })).toHaveCount(0);
     await expect(page.getByRole('radio', { name: 'Walk' })).toHaveCount(0);
 
-    if (isMobile) await page.getByRole('radio', { name: 'View', exact: true }).click();
+    if (isMobile) await page.getByRole('radio', { name: 'Tools', exact: true }).click();
     await page.getByRole('button', { name: 'Head', exact: true }).click();
     await expect.poll(alpha).toBeLessThan(full);
     await page.getByRole('button', { name: 'Full skin' }).click();
@@ -463,7 +797,7 @@ test.describe('studio interactions', () => {
       state.__prevented = [];
       window.addEventListener('wheel', (e) => state.__prevented.push(e.defaultPrevented));
     });
-    const zoom = page.locator('output').first();
+    const zoom = page.getByRole('region', { name: '2D texture' }).locator('output');
     const before = await zoom.textContent();
 
     await texture.hover();
@@ -497,6 +831,6 @@ test.describe('studio interactions', () => {
     await expect(
       page.getByText("Full screen isn't available right now.", { exact: false }),
     ).toBeVisible();
-    await expect(page.getByRole('img', { name: '3D preview of Explorer' })).toBeVisible();
+    await expect(page.getByRole('img', { name: '3D preview of your skin' })).toBeVisible();
   });
 });

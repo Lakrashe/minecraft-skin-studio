@@ -9,7 +9,6 @@ import {
   type RefObject,
 } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { sampleSkin } from '@/content';
 import { FlatPreview } from '@/editor2d';
 import { BODY_PARTS, type BodyPart } from '@/engine';
 import { useT } from '@/i18n';
@@ -17,6 +16,7 @@ import { CAMERA_VIEWS, isWebGLAvailable, LazyPlayerViewer, type CameraView } fro
 import { ANIMATIONS, type AnimationId } from '@/rig';
 import { useReducedMotion } from '@/state';
 import { Button, IconButton, PixelLoader, SegmentedControl, toast, useVisibility } from '@/ui';
+import { useStudioDocument } from './document';
 import { effectiveAnimation, useStudio } from './studio-store';
 
 function useFullscreen(ref: RefObject<HTMLElement | null>, onError: () => void) {
@@ -53,8 +53,6 @@ export function PreviewPanel() {
   const t = useT();
   const s = useStudio(
     useShallow((st) => ({
-      sampleId: st.sampleId,
-      model: st.model,
       showInner: st.showInner,
       showOuter: st.showOuter,
       focus: st.focus,
@@ -80,8 +78,7 @@ export function PreviewPanel() {
   const showStatic = useCallback(() => {
     setStaticView(true);
   }, []);
-  const skin = sampleSkin(s.sampleId);
-  const name = t(`samples.${s.sampleId}.name`);
+  const { texture: skin, document } = useStudioDocument();
 
   // Focusing one body part isolates it in 3D (and in the flat fallback).
   const visibleParts = useMemo<ReadonlySet<BodyPart>>(
@@ -99,12 +96,12 @@ export function PreviewPanel() {
       <div className="flex size-full flex-col items-center justify-center gap-4 p-4 text-center">
         <FlatPreview
           skin={skin}
-          model={s.model}
+          model={document.model}
           height={220}
           showInner={s.showInner}
           showOuter={s.showOuter}
           visibleParts={visibleParts}
-          label={t('studio.flatPreviewLabel', { name })}
+          label={t('studio.flatPreviewLabel')}
         />
         <p className="max-w-xs text-xs text-muted">
           {t('webgl.unavailable')} {t('studio.flatPreviewNote')}
@@ -147,7 +144,7 @@ export function PreviewPanel() {
           <LazyPlayerViewer
             className="absolute inset-0"
             skin={skin}
-            model={s.model}
+            model={document.model}
             showInner={s.showInner}
             showOuter={s.showOuter}
             visibleParts={visibleParts}
@@ -156,7 +153,7 @@ export function PreviewPanel() {
             active={visible}
             view={s.view}
             viewRequest={s.viewRequest}
-            label={t('studio.previewLabel', { name })}
+            label={t('studio.previewLabel')}
             fallback={fallback}
           />
         </Suspense>

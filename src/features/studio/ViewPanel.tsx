@@ -1,52 +1,48 @@
-import type { ReactNode } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { getSample } from '@/content';
 import { BODY_PARTS, type BodyPart, type SkinModel } from '@/engine';
 import { useT } from '@/i18n';
 import { cn, SegmentedControl, Switch } from '@/ui';
-import { useStudio } from './studio-store';
+import { useStudioDocument } from './document';
+import { setModel } from './editing';
+import { useStudio, type EditLayer } from './studio-store';
+import { PanelGroup } from './ToolsPanel';
 
-function PanelGroup({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <fieldset className="flex flex-col gap-3 border-b border-line px-4 py-5 last:border-b-0">
-      <legend className="float-left mb-1 w-full text-xs font-semibold tracking-wider text-subtle uppercase">
-        {title}
-      </legend>
-      {children}
-    </fieldset>
-  );
-}
-
-/** Left panel: view controls that work today (body-part focus, layers, canvas, model). */
+/** Left panel, bottom: what to edit and see — body part, skin layers, canvas, model. */
 export function ViewPanel() {
   const t = useT();
   // Narrow subscription: pixel inspection and zoom must not re-render this panel.
   const s = useStudio(
     useShallow((st) => ({
-      sampleId: st.sampleId,
-      model: st.model,
       focus: st.focus,
+      editLayer: st.editLayer,
       showInner: st.showInner,
       showOuter: st.showOuter,
       grid: st.grid,
       outlines: st.outlines,
+      labels: st.labels,
       setFocus: st.setFocus,
+      setEditLayer: st.setEditLayer,
       setShowInner: st.setShowInner,
       setShowOuter: st.setShowOuter,
       setGrid: st.setGrid,
       setOutlines: st.setOutlines,
-      setModel: st.setModel,
+      setLabels: st.setLabels,
     })),
   );
-  const designedFor = getSample(s.sampleId).model;
+  const model = useStudioDocument().document.model;
   const parts: readonly (BodyPart | 'all')[] = ['all', ...BODY_PARTS];
   const modelOptions: { value: SkinModel; label: string }[] = [
     { value: 'classic', label: t('studio.classic') },
     { value: 'slim', label: t('studio.slim') },
   ];
+  const paintOnOptions: { value: EditLayer; label: string }[] = [
+    { value: 'both', label: t('studio.paintOnBoth') },
+    { value: 'inner', label: t('studio.paintOnInner') },
+    { value: 'outer', label: t('studio.paintOnOuter') },
+  ];
 
   return (
-    <div className="flex flex-col">
+    <>
       <PanelGroup title={t('studio.bodyPart')}>
         <div className="grid grid-cols-2 gap-1.5">
           {parts.map((part) => {
@@ -72,6 +68,7 @@ export function ViewPanel() {
             );
           })}
         </div>
+        <p className="text-xs text-muted">{t('studio.bodyPartHint')}</p>
       </PanelGroup>
 
       <PanelGroup title={t('studio.layers')}>
@@ -87,30 +84,38 @@ export function ViewPanel() {
           checked={s.showOuter}
           onChange={s.setShowOuter}
         />
+        <SegmentedControl
+          label={t('studio.paintOn')}
+          value={s.editLayer}
+          options={paintOnOptions}
+          onChange={s.setEditLayer}
+        />
+        {(!s.showInner || !s.showOuter) && (
+          <p className="text-xs text-muted">{t('studio.hiddenNotEditable')}</p>
+        )}
       </PanelGroup>
 
       <PanelGroup title={t('studio.canvas')}>
         <Switch label={t('studio.grid')} checked={s.grid} onChange={s.setGrid} />
         <Switch label={t('studio.outlines')} checked={s.outlines} onChange={s.setOutlines} />
+        <Switch
+          label={t('studio.faceLabels')}
+          description={t('studio.faceLabelsHint')}
+          checked={s.labels}
+          onChange={s.setLabels}
+        />
       </PanelGroup>
 
       <PanelGroup title={t('studio.model')}>
         <SegmentedControl
           label={t('studio.model')}
           hideLabel
-          value={s.model}
+          value={model}
           options={modelOptions}
-          onChange={s.setModel}
+          onChange={setModel}
         />
         <p className="text-xs text-muted">{t('studio.modelHint')}</p>
-        {s.model !== designedFor && (
-          <p role="status" className="text-xs text-warning">
-            {t('studio.modelMismatch', {
-              model: t(designedFor === 'slim' ? 'studio.slim' : 'studio.classic').toLowerCase(),
-            })}
-          </p>
-        )}
       </PanelGroup>
-    </div>
+    </>
   );
 }

@@ -9,7 +9,11 @@ export {
   MAX_ZOOM,
   MIN_ZOOM,
   clampZoom,
+  fitLabel,
   fitZoom,
+  labelFontSize,
+  MIN_LABEL_ZOOM,
+  pinchZoom,
   isBodyPart,
   type Texel,
 } from './texture-view-math';

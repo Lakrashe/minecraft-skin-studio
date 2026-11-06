@@ -12,7 +12,7 @@ interface Feature {
 }
 
 const FEATURES: readonly Feature[] = [
-  { key: 'pixelEditor', icon: 'pencil', status: 'inProgress' },
+  { key: 'pixelEditor', icon: 'pencil', status: 'available' },
   { key: 'preview3d', icon: 'cube', status: 'available' },
   { key: 'ai', icon: 'sparkles', status: 'planned' },
   { key: 'outfits', icon: 'shirt', status: 'planned' },

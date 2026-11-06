@@ -37,3 +37,39 @@ export {
   type BoxSize,
   type FaceRegion,
 } from './format/regions';
+export {
+  createMask,
+  editMask,
+  maskCount,
+  maskHas,
+  regionMask,
+  type RegionFilter,
+  type SkinMask,
+} from './mask/mask';
+export { MIRROR_PART, mirrorFacePosition, mirrorMap, mirrorPoint } from './symmetry/mirror';
+export { floodFillIndices, linePoints, rectPoints, type Point } from './raster/shapes';
+export {
+  applyCommand,
+  blankDocument,
+  createDocument,
+  createPatch,
+  invertCommand,
+  withChanges,
+  type Command,
+  type PixelChanges,
+  type PixelPatch,
+  type SkinDocument,
+} from './document/document';
+export {
+  DocumentStore,
+  commandMatches,
+  type DocumentStoreOptions,
+  type StoreSnapshot,
+} from './document/store';
+export {
+  DRAWING_TOOLS,
+  Stroke,
+  pickColor,
+  type DrawingTool,
+  type ToolOptions,
+} from './tools/tools';
