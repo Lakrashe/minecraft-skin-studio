@@ -2,7 +2,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { BODY_PARTS, type BodyPart, type SkinModel } from '@/engine';
 import { useT } from '@/i18n';
 import { cn, SegmentedControl, Switch } from '@/ui';
-import { useStudioDocument } from './document';
+import { useStudioModel } from './document';
 import { setModel } from './editing';
 import { useStudio, type EditLayer } from './studio-store';
 import { PanelGroup } from './ToolsPanel';
@@ -29,7 +29,7 @@ export function ViewPanel() {
       setLabels: st.setLabels,
     })),
   );
-  const model = useStudioDocument().document.model;
+  const model = useStudioModel();
   const parts: readonly (BodyPart | 'all')[] = ['all', ...BODY_PARTS];
   const modelOptions: { value: SkinModel; label: string }[] = [
     { value: 'classic', label: t('studio.classic') },

@@ -26,6 +26,7 @@ export {
   shoulderY,
   type PartLayout,
 } from './player-geometry';
+export { connectSkinSource, isSkinSource, staticSkinSource, type SkinSource } from './skin-source';
 export {
   OUTER_ALPHA_CUTOFF,
   PlayerRig,

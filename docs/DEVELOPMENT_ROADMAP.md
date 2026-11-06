@@ -22,9 +22,10 @@ Skin Editor" step (called "Phase 3" by the owner) then built most of 1.4, 1.5,
 product: saving (1.13) and PNG import/export (1.12).
 
 > Naming note: the owner called the homepage step "Phase 2", the editor
-> step "Phase 3" and the 3D rendering step "Phase 4". In this roadmap, Phase 2
-> remains *Creative tools*, Phase 3 *AI* and Phase 4 *Community*; all three
-> owner steps belong to Phase 1.
+> step "Phase 3", the 3D rendering step "Phase 4" and the synchronization step
+> "Phase 5". In this roadmap, Phase 2 remains *Creative tools*, Phase 3 *AI*,
+> Phase 4 *Community* and Phase 5 *Marketplace*; all four owner steps belong to
+> Phase 1.
 
 ---
 
@@ -137,8 +138,13 @@ geometry (hips ±1.9, slim shoulders 0.5 lower — verify), Java transparency
 rules, lighting presets + intensity, flat exact-color mode, 360° turntable;
 geometry and every face's UVs tested in Node, face colors tested in real
 WebGL. Resource release tested (every geometry, material and texture; no
-skin texture left after model switches or leaving the Studio). Remaining:
-wireframe, texture inspection, screenshots, animated camera transitions.*
+skin texture left after model switches or leaving the Studio). Owner's
+"Phase 5" step: live 2D → 3D synchronization through a skin source (no React
+re-render of the 3D view per edit), per-row partial texture uploads, texel ↔
+surface mapping, exhaustive raycast tests and per-pixel real-WebGL tests;
+full texture rebuild after WebGL context loss (audit fix, tested).
+Remaining: wireframe, texture inspection, screenshots, animated camera
+transitions.*
 - PlayerModel with engine-derived UVs; classic/slim; outer-layer toggle;
   per-part visibility; correct transparency; instant updates from the store.
 - Orbit rotate/zoom/pan, front/back/side/top/reset presets, fullscreen,

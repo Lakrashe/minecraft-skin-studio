@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router';
 import { isSampleId, SAMPLE_CHARACTERS, type SampleId } from '@/content';
 import { useT } from '@/i18n';
 import { cn, Icon, IconButton, SegmentedControl, Select, toast, Tooltip } from '@/ui';
-import { useStudioDocument } from './document';
+import { useStudioSelector } from './document';
 import { loadSource, redo, undo } from './editing';
 import { PreviewPanel } from './PreviewPanel';
 import { useStudioShortcuts } from './shortcuts';
@@ -14,6 +14,34 @@ import { ToolsPanel } from './ToolsPanel';
 import { ViewPanel } from './ViewPanel';
 
 type MobilePanel = 'texture' | 'preview' | 'tools';
+
+/**
+ * Undo/redo buttons. They subscribe to the history themselves, so a pixel
+ * edit re-renders only these two buttons, not the whole page.
+ */
+function UndoRedo() {
+  const t = useT();
+  const canUndo = useStudioSelector((s) => s.canUndo);
+  const canRedo = useStudioSelector((s) => s.canRedo);
+  return (
+    <div className="flex items-center gap-1">
+      <IconButton
+        icon="undo"
+        label={t('studio.undo')}
+        shortcut="Ctrl+Z"
+        disabled={!canUndo}
+        onClick={undo}
+      />
+      <IconButton
+        icon="redo"
+        label={t('studio.redo')}
+        shortcut="Ctrl+Shift+Z"
+        disabled={!canRedo}
+        onClick={redo}
+      />
+    </div>
+  );
+}
 type Source = SampleId | 'blank';
 
 /**
@@ -23,7 +51,6 @@ type Source = SampleId | 'blank';
 export function StudioPage() {
   const t = useT();
   const source = useStudio((s) => s.source);
-  const { canUndo, canRedo } = useStudioDocument();
   const [params, setParams] = useSearchParams();
   const [mobilePanel, setMobilePanel] = useState<MobilePanel>('texture');
   useStudioShortcuts();
@@ -69,22 +96,7 @@ export function StudioPage() {
             className="h-9"
           />
         </div>
-        <div className="flex items-center gap-1">
-          <IconButton
-            icon="undo"
-            label={t('studio.undo')}
-            shortcut="Ctrl+Z"
-            disabled={!canUndo}
-            onClick={undo}
-          />
-          <IconButton
-            icon="redo"
-            label={t('studio.redo')}
-            shortcut="Ctrl+Shift+Z"
-            disabled={!canRedo}
-            onClick={redo}
-          />
-        </div>
+        <UndoRedo />
         <div className="ml-auto self-center max-md:hidden">
           <Tooltip content={t('nav.settings')} align="end">
             <Link

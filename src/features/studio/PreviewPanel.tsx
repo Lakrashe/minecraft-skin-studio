@@ -1,10 +1,12 @@
 import {
+  memo,
   Suspense,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
+  type ComponentProps,
   type ReactNode,
   type RefObject,
 } from 'react';
@@ -35,7 +37,7 @@ import {
   toast,
   useVisibility,
 } from '@/ui';
-import { useStudioDocument } from './document';
+import { studioSkinSource, useStudioDocument, useStudioModel } from './document';
 import { effectiveAnimation, useStudio } from './studio-store';
 
 function useFullscreen(ref: RefObject<HTMLElement | null>, onError: () => void) {
@@ -61,6 +63,12 @@ function useFullscreen(ref: RefObject<HTMLElement | null>, onError: () => void) 
   return { active, supported, toggle };
 }
 
+/** The no-WebGL fallback: a flat view that follows edits (subscribes itself). */
+function LiveFlatPreview(props: Omit<ComponentProps<typeof FlatPreview>, 'skin'>) {
+  const { texture } = useStudioDocument();
+  return <FlatPreview skin={texture} {...props} />;
+}
+
 /** Mounted only while the static fallback is shown; reports it to the panel. */
 function StaticFallback({ onShow, children }: { onShow: () => void; children: ReactNode }) {
   useEffect(onShow, [onShow]);
@@ -68,7 +76,11 @@ function StaticFallback({ onShow, children }: { onShow: () => void; children: Re
 }
 
 /** Right panel: live 3D preview with camera and animation controls. */
-export function PreviewPanel() {
+/**
+ * Memoized (no props): re-renders only for its own subscriptions — model,
+ * layers, camera, lighting — never because the page re-rendered.
+ */
+export const PreviewPanel = memo(function PreviewPanel() {
   const t = useT();
   const s = useStudio(
     useShallow((st) => ({
@@ -103,7 +115,9 @@ export function PreviewPanel() {
   const showStatic = useCallback(() => {
     setStaticView(true);
   }, []);
-  const { texture: skin, document } = useStudioDocument();
+  // Only the model: pixel edits reach the 3D view through `studioSkinSource`
+  // without re-rendering this panel.
+  const model = useStudioModel();
 
   // Focusing one body part isolates it in 3D (and in the flat fallback).
   const visibleParts = useMemo<ReadonlySet<BodyPart>>(
@@ -124,9 +138,8 @@ export function PreviewPanel() {
   const fallback = (
     <StaticFallback onShow={showStatic}>
       <div className="flex size-full flex-col items-center justify-center gap-4 p-4 text-center">
-        <FlatPreview
-          skin={skin}
-          model={document.model}
+        <LiveFlatPreview
+          model={model}
           height={220}
           showInner={s.showInner}
           showOuter={s.showOuter}
@@ -173,8 +186,8 @@ export function PreviewPanel() {
         >
           <LazyPlayerViewer
             className="absolute inset-0"
-            skin={skin}
-            model={document.model}
+            skin={studioSkinSource}
+            model={model}
             showInner={s.showInner}
             showOuter={s.showOuter}
             visibleParts={visibleParts}
@@ -265,4 +278,4 @@ export function PreviewPanel() {
       )}
     </div>
   );
-}
+});

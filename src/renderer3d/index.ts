@@ -23,4 +23,5 @@ export {
   isLightingPreset,
   type LightingPreset,
 } from './core/lighting';
+export type { SkinSource } from './core/skin-source';
 export { isWebGLAvailable } from './webgl';

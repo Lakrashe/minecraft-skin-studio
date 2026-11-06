@@ -13,12 +13,17 @@ import {
   type CameraView,
   type LightingPreset,
   type LightingRig,
+  type SkinSource,
 } from './core';
 import { PlayerModel } from './PlayerModel';
 import SceneCanvas from './SceneCanvas';
 
 export interface PlayerViewerProps {
-  readonly skin: PixelBuffer;
+  /**
+   * A fixed texture, or a live `SkinSource` (e.g. the editor's document): live
+   * changes reach the 3D texture without re-rendering the viewer.
+   */
+  readonly skin: PixelBuffer | SkinSource;
   readonly model: SkinModel;
   readonly showInner?: boolean;
   readonly showOuter?: boolean;
@@ -86,7 +91,7 @@ function CameraPreset({ view, request }: { view: CameraView; request: number }) 
 
 interface PictureInputs {
   readonly frameloop: string;
-  readonly skin: PixelBuffer;
+  readonly skin: PixelBuffer | SkinSource;
   readonly model: SkinModel;
   readonly showInner: boolean;
   readonly showOuter: boolean;

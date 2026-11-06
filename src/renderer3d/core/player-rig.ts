@@ -90,6 +90,10 @@ export class PlayerRig {
   private readonly meshList: RigMesh[] = [];
   private readonly materials: Readonly<Record<'lit' | 'unlit', Record<SkinLayer, Material>>>;
   private unlit = false;
+  /** Whether the GPU holds the texture (set by Three.js after its first upload). */
+  private uploaded = false;
+  /** Bytes uploaded in the last `setSkin`, for tests and diagnostics. */
+  private lastUpload = 0;
 
   constructor(model: SkinModel) {
     this.model = model;
@@ -111,6 +115,11 @@ export class PlayerRig {
         inner: new MeshBasicMaterial({ ...inner, toneMapped: false }),
         outer: new MeshBasicMaterial({ ...outer, toneMapped: false }),
       },
+    };
+    // Three.js calls this after uploading the texture; from then on partial
+    // (per-row) updates are safe.
+    this.texture.onUpdate = () => {
+      this.uploaded = true;
     };
     this.root.name = 'player';
     for (const layout of playerLayout(model)) {
@@ -143,15 +152,68 @@ export class PlayerRig {
     return this.pivots.get(part);
   }
 
-  /** Copies a 64×64 skin into the texture (one GPU upload; no new resources). */
-  setSkin(skin: PixelBuffer): void {
+  /**
+   * Copies a 64×64 skin into the texture and schedules the GPU upload. Only
+   * rows that changed are uploaded (per-row ranges spanning the changed
+   * pixels), so a one-pixel edit uploads 4 bytes instead of 16 KB. Until the
+   * texture has reached the GPU once, the whole texture is uploaded.
+   * Returns whether anything changed (nothing to draw otherwise).
+   */
+  setSkin(skin: PixelBuffer): boolean {
     if (skin.width !== SKIN_WIDTH || skin.height !== SKIN_HEIGHT) {
       throw new RangeError(
         `Expected a 64×64 skin, got ${String(skin.width)}×${String(skin.height)}`,
       );
     }
-    (this.texture.image.data as Uint8Array).set(skin.data);
+    const target = this.texture.image.data as Uint8Array;
+    const source = skin.data;
+    const rowBytes = SKIN_WIDTH * 4;
+    let uploaded = 0;
+    if (!this.uploaded) {
+      target.set(source);
+      this.texture.clearUpdateRanges();
+      uploaded = target.length;
+    } else {
+      for (let row = 0; row < SKIN_HEIGHT; row++) {
+        const start = row * rowBytes;
+        let first = -1;
+        let last = -1;
+        for (let i = start; i < start + rowBytes; i++) {
+          if (target[i] !== source[i]) {
+            if (first < 0) first = i;
+            last = i;
+          }
+        }
+        if (first < 0) continue;
+        // Whole pixels: from the first changed pixel to the last one in the row.
+        const from = first - (first % 4);
+        const to = last - (last % 4) + 4;
+        target.set(source.subarray(from, to), from);
+        this.texture.addUpdateRange(from, to - from);
+        uploaded += to - from;
+      }
+    }
+    this.lastUpload = uploaded;
+    if (uploaded === 0) return false;
     this.texture.needsUpdate = true;
+    return true;
+  }
+
+  /**
+   * The GPU copy of the texture is gone or untrusted (e.g. the WebGL context
+   * was lost or restored): drop any pending partial ranges and upload the
+   * whole current texture next time. Later edits use partial uploads again
+   * once that full upload has happened.
+   */
+  invalidateGpuTexture(): void {
+    this.uploaded = false;
+    this.texture.clearUpdateRanges();
+    this.texture.needsUpdate = true;
+  }
+
+  /** Bytes scheduled for upload by the last `setSkin` (0 when nothing changed). */
+  get lastUploadBytes(): number {
+    return this.lastUpload;
   }
 
   setVisibility({ showInner, showOuter, visibleParts }: RigVisibility): void {
